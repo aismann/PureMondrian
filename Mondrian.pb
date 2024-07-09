@@ -650,7 +650,7 @@ CompilerEndIf
 Background = RGBA(Red(Background),Green(Background),Blue(Background),255)
 
 SetGadgetFont(#PB_Default,FontID(LoadFont(#PB_Any,"Verdana",10,#PB_Font_HighQuality)))
-CanvasGadget(#Canvas,0,0,400,WindowHeight(#MainWindow)-54,#PB_Canvas_ClipMouse)
+CanvasGadget(#Canvas,0,0,400,WindowHeight(#MainWindow)-54,#PB_Canvas_ClipMouse|#PB_Canvas_Keyboard)
 CanvasGadget(#CanvasTools,0,WindowHeight(#MainWindow)-54,400,54)
 StartDrawing(CanvasOutput(#Canvas))
 Box(0,0,OutputWidth(),OutputHeight(),Background)
@@ -707,8 +707,8 @@ Repeat
                 SetGadgetItemText(#Difficulty,1,"Medium")
                 SetGadgetItemText(#Difficulty,2,"Hard")
                 SetGadgetItemText(#Difficulty,3,"Master")
-                For X=1 To CountGadgetItems(#List)
-                  SetGadgetItemText(#List,X-1,"Riddle "+Str(X),0)
+                For X=0 To CountGadgetItems(#List)-1
+                  SetGadgetItemText(#List,X,"Riddle "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
                 Next
               Else  
                 GadgetToolTip(#Language,"Sprache")
@@ -718,8 +718,8 @@ Repeat
                 SetGadgetItemText(#Difficulty,1,"Mittel")
                 SetGadgetItemText(#Difficulty,2,"Schwer")
                 SetGadgetItemText(#Difficulty,3,"Meister")
-                For X=1 To CountGadgetItems(#List)
-                  SetGadgetItemText(#List,X-1,"Rätsel "+Str(X),0)
+                For X=0 To CountGadgetItems(#List)-1
+                  SetGadgetItemText(#List,X,"Rätsel "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
                 Next
               EndIf
             Case #InternetButton
@@ -893,6 +893,14 @@ Repeat
               DrawTools()
             Case #Difficulty
               LoadList(GetGadgetState(#Difficulty))
+          EndSelect
+        Case #PB_EventType_KeyDown
+          Select EventGadget()
+            Case #Canvas
+              Select GetGadgetAttribute(#Canvas,#PB_Canvas_Key)
+                Case #PB_Shortcut_R
+                  PostEvent(#PB_Event_Gadget,#MainWindow,#Canvas,#PB_EventType_RightClick)
+              EndSelect
           EndSelect
       EndSelect
   EndSelect
