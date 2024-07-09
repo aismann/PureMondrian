@@ -79,23 +79,7 @@ Structure Task
   Image.i
 EndStructure
 
-Global Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(), Background.l,Language.a,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,WinAnim=CatchImage(#PB_Any,?Win)
-
-Procedure WinAnimation(Dummy)
-  Protected Frame
-  Repeat
-    SetImageFrame(WinAnim,Frame)
-    If StartDrawing(CanvasOutput(#Canvas))
-      DrawImage(ImageID(WinAnim),0,400,400,214)
-      StopDrawing()
-    EndIf
-    Frame+1
-    If Frame >= ImageFrameCount(WinAnim)
-      Break
-    EndIf
-    Delay(GetImageFrameDelay(WinAnim))
-  ForEver
-EndProcedure
+Global Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(), Background.l,Language.a,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,WinAnim=CatchImage(#PB_Any,?Win),WinThread
 
 Procedure AddPathRoundBox(x.d,y.d,w.d,h.d,radius.d,flags=#PB_Path_Default)
   If Solved
@@ -297,6 +281,25 @@ Procedure BlackWhite(OutImage,Address)
     Next
   Next
   StopDrawing()
+EndProcedure
+
+Procedure WinAnimation(Dummy)
+  Protected Frame
+  Repeat
+    SetImageFrame(WinAnim,Frame)
+    If StartDrawing(CanvasOutput(#Canvas))
+      DrawImage(ImageID(WinAnim),0,400,400,214)
+      StopDrawing()
+    EndIf
+    Frame+1
+    If Frame>=ImageFrameCount(WinAnim) Or Solved=#False
+      Break
+    EndIf
+    Delay(GetImageFrameDelay(WinAnim))
+  ForEver
+  If Solved=#False
+    Draw(0)
+  EndIf
 EndProcedure
 
 Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor,MyFixed=#False)
@@ -524,6 +527,7 @@ EndProcedure
 
 Procedure LoadTask(Task)
   Protected X.a
+  Solved=#False
   ForEach Tiles()
     ClearList(Tiles()\Position())
   Next
@@ -571,7 +575,6 @@ Procedure LoadTask(Task)
       Tiles()\DragH=25*Tiles()\Y-2
     EndIf
   Next
-  Solved=#False
 EndProcedure
 
 Procedure Rotate(Direction);0=Anticlockwise, 1=Clockwise
@@ -844,12 +847,7 @@ Repeat
                   Solved=#True
                   Draw(#False)
                   DrawTools()
-;                   If Language
-;                     MessageRequester("Solved!","Hooray, you solved the riddle!",#PB_MessageRequester_Info)
-;                   Else
-;                     MessageRequester("Gelöst!","Hurra, sie haben das Rätsel gelöst!",#PB_MessageRequester_Info)
-;                   EndIf
-                  CreateThread(@WinAnimation(),0)
+                  WinThread=CreateThread(@WinAnimation(),0)
                 EndIf
               EndIf
           EndSelect
