@@ -80,7 +80,10 @@ Structure Task
   BestTime.l
 EndStructure
 
-Global Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l
+Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"Progress.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l
+If Not FileSize(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")=-2
+  CreateDirectory(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")
+EndIf
 
 Procedure AddPathRoundBox(x.d,y.d,w.d,h.d,radius.d,flags=#PB_Path_Default)
   If Solved
@@ -253,7 +256,6 @@ Procedure DrawTools()
     Time()
     MovePathCursor(160-VectorTextWidth(VT$),30-VectorTextHeight(VT$),#PB_Path_Default)
     DrawVectorText(VT$)
-    
     If BestTime
       VectorSourceColor($FF00EE00)
       Time=BestTime
@@ -264,7 +266,6 @@ Procedure DrawTools()
     EndIf
     MovePathCursor(160-VectorTextWidth(VT$),30,#PB_Path_Default)
     DrawVectorText(VT$)
-    
   EndIf
   StopVectorDrawing()
   UnlockMutex(ToolMutex)
@@ -691,8 +692,8 @@ Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
 EndProcedure
 
 Procedure LoadProgress()
-  If FileSize(GetPathPart(ProgramFilename())+"Progress.dat")>=0
-    Protected File=ReadFile(#PB_Any,GetPathPart(ProgramFilename())+"Progress.dat"),Difficulty.a,Count.w,Counter
+  If FileSize(SaveFile$)>=0
+    Protected File=ReadFile(#PB_Any,SaveFile$),Difficulty.a,Count.w,Counter
     If File
       Language=ReadByte(File)
       For Difficulty=0 To 3
@@ -718,7 +719,7 @@ Procedure LoadProgress()
 EndProcedure
 
 Procedure SaveProgress()
-  Protected File=CreateFile(#PB_Any,GetPathPart(ProgramFilename())+"Progress.dat"),Difficulty.a,Count.w,Seek.l
+  Protected File=CreateFile(#PB_Any,SaveFile$),Difficulty.a,Count.w,Seek.l
   If File
     WriteByte(File,1-Language)
     For Difficulty=0 To 3
@@ -1037,12 +1038,11 @@ Repeat
 ForEver
 If GetGadgetState(#SaveProgress)
   SaveProgress()
-ElseIf FileSize(GetPathPart(ProgramFilename())+"Progress.dat")>=0
-  DeleteFile(GetPathPart(ProgramFilename())+"Progress.dat",#PB_FileSystem_Force)
+ElseIf FileSize(SaveFile$)>=0
+  DeleteFile(SaveFile$,#PB_FileSystem_Force)
 EndIf
 
-DataSection
-  ;Predefined Riddles
+DataSection;Predefined Riddles
   Tasks:
   ;Easy
   Data.a 0,0,1,0,4,0,5,3,1
@@ -1138,9 +1138,7 @@ DataSection
   Data.a 3,2,6,0,3,1,0,7,0
   TasksEnd:
 EndDataSection
-
-DataSection
-  ;Icons
+DataSection;Icons
   ;All icons are distributed under licenses which allow me to use them for non-commercial projects!
   
   ;The following icons are used form the icon set "Farm Fresh Icons": https://fatcow.com/free-icons
