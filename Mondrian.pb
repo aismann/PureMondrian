@@ -975,19 +975,24 @@ Repeat
                   EndIf
                 Next
                 If X=11
+                  EndTimer=ElapsedMilliseconds()
                   Solved=#True
                   Draw(#False)
                   *Task=GetGadgetItemData(#List,GetGadgetState(#List))
                   *Task\State=#True
                   SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Task\DoneImage))
                   Timer=2
-                  EndTimer=ElapsedMilliseconds()
                   If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0 And Not SolveMode
                     *Task\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
                     *Task\BestTime=BestTime
                   EndIf
                   DrawTools()
+                  If Language
+                    SetGadgetText(#Progress,"Progress: "+Progress()+"%")
+                  Else
+                    SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
+                  EndIf
                   WinThread=CreateThread(@Animation(),WinAnim)
                 EndIf
               EndIf
