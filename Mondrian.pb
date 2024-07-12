@@ -15,7 +15,7 @@ Enumeration Gadget
   #InfoButton
   #Difficulty
   #Language
-  #SaveProgress
+  #Progress
 EndEnumeration
 Enumeration Image
   #Image_Rotate
@@ -80,7 +80,8 @@ Structure Task
   BestTime.l
 EndStructure
 
-Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"Progress.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l
+Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"Progress.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l
+Global SolveMode.a
 If Not FileSize(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")=-2
   CreateDirectory(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")
 EndIf
@@ -239,7 +240,9 @@ Procedure DrawTools()
   Y=0.5*H
   Tool=0
   GGS=Bool(GetGadgetState(#List)=-1)
-  DrawTool(W-216,#Image_Solve,#Image_SolveBW,1)
+  If SolveMode
+    DrawTool(W-216,#Image_Solve,#Image_SolveBW,1)
+  EndIf
   DrawTool(W-144,#Image_Reset,#Image_ResetBW,2)
   DrawTool(W-96,#Image_ARotate,#Image_ARotateBW,3)
   DrawTool(W-48,#Image_Rotate,#Image_RotateBW,4)
@@ -247,13 +250,22 @@ Procedure DrawTools()
     Protected VT$,Time.l,TM.a
     VectorFont(FontID(VFont),20)
     If Timer=1
-      VectorSourceColor($FF000000)
       Time=(ElapsedMilliseconds()-InitTimer)
     ElseIf Timer=2
-      VectorSourceColor($FF00EE00)
       Time=(EndTimer-InitTimer)
     EndIf
-    Time()
+    If BestTime=0 Or InitTimer=0
+      VectorSourceColor($FF000000)
+    ElseIf Time<BestTime
+      VectorSourceColor($FF00EE00)
+    Else
+      VectorSourceColor($FF0000FF)
+    EndIf
+    If InitTimer=0
+      VT$="--:--:--.---"
+    Else
+      Time()
+    EndIf
     MovePathCursor(160-VectorTextWidth(VT$),30-VectorTextHeight(VT$),#PB_Path_Default)
     DrawVectorText(VT$)
     If BestTime
@@ -498,8 +510,8 @@ Procedure LoadList(Difficulty)
       Else
         AddGadgetItem(#List,-1,"Rätsel "+Str(ListIndex(Tasks())+1),ImageID(Image))
       EndIf
+      SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Tasks())
     EndIf
-    SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Tasks())
   Next
   StartDrawing(CanvasOutput(#Canvas))
   Box(0,0,OutputWidth(),OutputHeight(),Background)
@@ -698,23 +710,20 @@ Procedure LoadProgress()
       Language=ReadByte(File)
       For Difficulty=0 To 3
         Count=ReadWord(File)
-        ResetList(Tasks())
-        For Counter=1 To Count
-          If NextElement(Tasks())
-            If Tasks()\Difficulty=Difficulty
-              Tasks()\State=ReadByte(File)
-              Tasks()\BestTime=ReadLong(File)
-              Continue
+        Counter=0
+        ForEach Tasks()
+          If Tasks()\Difficulty=Difficulty
+            Tasks()\State=ReadByte(File)
+            Tasks()\BestTime=ReadLong(File)
+            Count+1
+            If Count=Counter
+              Break
             EndIf
-          Else
-            Break
           EndIf
         Next
       Next
-      CloseFile(File)
-      PostEvent(#PB_Event_Gadget,#MainWindow,#Language,#PB_EventType_LeftClick)
+    CloseFile(File)
     EndIf
-    SetGadgetState(#SaveProgress,#PB_Checkbox_Checked)
   EndIf
 EndProcedure
 
@@ -747,6 +756,16 @@ Procedure SaveProgress()
   EndIf
 EndProcedure
 
+Procedure.s Progress()
+  Protected Prog
+  ForEach Tasks()
+    If Tasks()\State
+      Prog+1
+    EndIf
+  Next
+  ProcedureReturn Str(Round(100*Prog/ListSize(Tasks()),#PB_Round_Down))
+EndProcedure
+
 OpenWindow(#MainWindow,0,0,700,630,"PureMondrian 1.2.2",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
 CompilerIf #PB_Compiler_OS=#PB_OS_Windows
   Background.l = GetSysColor_(#COLOR_BTNFACE)
@@ -763,19 +782,19 @@ CanvasGadget(#CanvasTools,0,WindowHeight(#MainWindow)-54,400,54)
 StartDrawing(CanvasOutput(#Canvas))
 Box(0,0,OutputWidth(),OutputHeight(),Background)
 StopDrawing()
-ListIconGadget(#List,400,0,300,570,"Riddle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
+TextGadget(#Progress,400,5,300,25,"Fortschritt: -",#PB_Text_Center)
+ListIconGadget(#List,400,30,300,570,"Riddle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
 SetGadgetAttribute(#List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
-ComboBoxGadget(#Difficulty,400,570,150,30)
+ComboBoxGadget(#Difficulty,400,600,150,30)
 AddGadgetItem(#Difficulty,-1,"Einfach")
 AddGadgetItem(#Difficulty,-1,"Mittel")
 AddGadgetItem(#Difficulty,-1,"Schwer")
 AddGadgetItem(#Difficulty,-1,"Meister")
 SetGadgetState(#Difficulty,0)
-ButtonImageGadget(#RandomButton,550,570,30,30,ImageID(CatchImage(#PB_Any,?I_Dice)))
-ButtonImageGadget(#Language,610,570,30,30,ImageID(CatchImage(#PB_Any,?I_Language)))
-ButtonImageGadget(#InfoButton,640,570,30,30,ImageID(CatchImage(#PB_Any,?I_Info)))
-ButtonImageGadget(#InternetButton,670,570,30,30,ImageID(CatchImage(#PB_Any,?I_Internet)))
-CheckBoxGadget(#SaveProgress,400,600,300,30,"Fortschritt speichern")
+ButtonImageGadget(#RandomButton,550,600,30,30,ImageID(CatchImage(#PB_Any,?I_Dice)))
+ButtonImageGadget(#Language,610,600,30,30,ImageID(CatchImage(#PB_Any,?I_Language)))
+ButtonImageGadget(#InfoButton,640,600,30,30,ImageID(CatchImage(#PB_Any,?I_Info)))
+ButtonImageGadget(#InternetButton,670,600,30,30,ImageID(CatchImage(#PB_Any,?I_Internet)))
 GadgetToolTip(#Language,"Sprache")
 GadgetToolTip(#InfoButton,"Information")
 GadgetToolTip(#InternetButton,"Offizieller PureBasic-Thread")
@@ -794,11 +813,19 @@ LoadTasks()
 LoadProgress()
 LoadList(0)
 AddWindowTimer(#MainWindow,1,100)
+AddKeyboardShortcut(#MainWindow,#PB_Shortcut_Control|#PB_Shortcut_Alt|#PB_Shortcut_Shift|#PB_Shortcut_Add,1)
+PostEvent(#PB_Event_Gadget,#MainWindow,#Language,#PB_EventType_LeftClick)
 
 Repeat
   Select WaitWindowEvent()
     Case #PB_Event_CloseWindow
       Break
+    Case #PB_Event_Menu
+      Select EventMenu()
+        Case 1
+          SolveMode=#True
+          DrawTools()
+      EndSelect
     Case #PB_Event_Timer
       Select EventTimer()
         Case 1
@@ -826,7 +853,7 @@ Repeat
                 SetGadgetItemText(#Difficulty,1,"Medium")
                 SetGadgetItemText(#Difficulty,2,"Hard")
                 SetGadgetItemText(#Difficulty,3,"Master")
-                SetGadgetText(#SaveProgress,"Save progress")
+                SetGadgetText(#Progress,"Progress: "+Progress()+"%")
                 For X=0 To CountGadgetItems(#List)-1
                   SetGadgetItemText(#List,X,"Riddle "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
                 Next
@@ -838,7 +865,7 @@ Repeat
                 SetGadgetItemText(#Difficulty,1,"Mittel")
                 SetGadgetItemText(#Difficulty,2,"Schwer")
                 SetGadgetItemText(#Difficulty,3,"Meister")
-                SetGadgetText(#SaveProgress,"Fortschritt speichern")
+                SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
                 For X=0 To CountGadgetItems(#List)-1
                   SetGadgetItemText(#List,X,"Rätsel "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
                 Next
@@ -871,6 +898,9 @@ Repeat
           Select EventGadget()
             Case #Canvas
               If Not Solved
+                If InitTimer=0
+                  InitTimer=ElapsedMilliseconds()
+                EndIf
                 Y=#True
                 MX=Round((DesktopUnscaledX(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseX))-61)/40,#PB_Round_Nearest)
                 MY=Round((DesktopUnscaledY(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseY))-61)/40,#PB_Round_Nearest)
@@ -949,9 +979,10 @@ Repeat
                   Draw(#False)
                   *Task=GetGadgetItemData(#List,GetGadgetState(#List))
                   *Task\State=#True
+                  SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Task\DoneImage))
                   Timer=2
                   EndTimer=ElapsedMilliseconds()
-                  If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0
+                  If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0 And Not SolveMode
                     *Task\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
                     *Task\BestTime=BestTime
@@ -1017,7 +1048,7 @@ Repeat
                 *Task=GetGadgetItemData(#List,GetGadgetState(#List))
                 LoadTask(*Task)
                 Draw(#False)
-                InitTimer=ElapsedMilliseconds()
+                InitTimer=0
                 BestTime=*Task\BestTime
                 Timer=1
               EndIf
@@ -1036,11 +1067,7 @@ Repeat
       EndSelect
   EndSelect
 ForEver
-If GetGadgetState(#SaveProgress)
-  SaveProgress()
-ElseIf FileSize(SaveFile$)>=0
-  DeleteFile(SaveFile$,#PB_FileSystem_Force)
-EndIf
+SaveProgress()
 
 DataSection;Predefined Riddles
   Tasks:
