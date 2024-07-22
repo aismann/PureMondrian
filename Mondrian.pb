@@ -1,4 +1,4 @@
-;PureMondrian 1.2.2 by Jac de Lad
+;PureMondrian 1.3.0 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -78,10 +78,10 @@ Structure Task
   DoneImage.i
   State.a
   BestTime.l
+  ID.l
 EndStructure
 
-Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"Progress.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l
-Global SolveMode.a
+Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l,SolveMode.a
 If Not FileSize(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")=-2
   CreateDirectory(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")
 EndIf
@@ -256,7 +256,7 @@ Procedure DrawTools()
     EndIf
     If BestTime=0 Or InitTimer=0
       VectorSourceColor($FF000000)
-    ElseIf Time<BestTime
+    ElseIf Time<=BestTime
       VectorSourceColor($FF00EE00)
     Else
       VectorSourceColor($FF0000FF)
@@ -321,6 +321,7 @@ Procedure Animation(Anim)
   EndIf
 EndProcedure
 
+;{ Create Tiles
 Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor,MyFixed=#False)
   AddElement(Tiles())
   Tiles()\X=MyX
@@ -341,8 +342,10 @@ CreateTile(3,2,0,3,#Red)
 CreateTile(2,2,0,1,#Cyan)
 CreateTile(5,1,0,0,#Yellow)
 CreateTile(4,1,5,0,#Yellow)
+;}
 
 Procedure Solve()
+  DisableDebugger
   Protected X.a,Y.a,*Pos.Tile,*MPos.MPos,NewList Locked.XY(),Position.w,Del.a,NewList Occupied.Tile(),Dim Field.a(7,7),Done.a,error.a
   
   ;Teilematrix erstellen
@@ -493,6 +496,7 @@ Procedure Solve()
     DrawTools()
   EndIf
   
+  EnableDebugger
 EndProcedure
 
 Procedure LoadList(Difficulty)
@@ -532,6 +536,7 @@ Procedure LoadTasks()
     Tasks()\Tile3X=PeekA(*Mem+6)
     Tasks()\Tile3Y=PeekA(*Mem+7)
     Tasks()\Tile3R=PeekA(*Mem+8)
+    Tasks()\ID=Val(Str(Tasks()\Difficulty)+Str(Tasks()\Tile1X)+Str(Tasks()\Tile1Y)+Str(Tasks()\Tile2X)+Str(Tasks()\Tile2Y)+Str(Tasks()\Tile2R)+Str(Tasks()\Tile3X)+Str(Tasks()\Tile3Y)+Str(Tasks()\Tile3R))
     Tasks()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,24,#Blue)
     StartDrawing(ImageOutput(Tasks()\Image))
     Box(2,2,8*Size,8*Size,Background)
@@ -621,6 +626,27 @@ Procedure LoadTask(Task)
   Next
 EndProcedure
 
+Procedure LoadNextTask()
+  Protected Done.a,X.w,*Task
+  ForEach Tasks()
+    If Tasks()\State=#False
+      *Task=@Tasks()
+      LoadList(Tasks()\Difficulty)
+      For X=0 To CountGadgetItems(#List)-1
+        If GetGadgetItemData(#List,X)=*Task
+          SetGadgetState(#List,X)
+          PostEvent(#PB_Event_Gadget,#MainWindow,#List,#PB_EventType_Change)
+          Break
+        EndIf
+      Next
+      Done=#True
+    EndIf
+  Next
+  If Not Done
+    LoadList(0)
+  EndIf
+EndProcedure
+
 Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
   Protected X.a,Y.a,Dim Temp.a(0,0),TX.a,TY.a
   CopyArray(Field(),Temp())
@@ -703,48 +729,94 @@ Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
   EndIf
 EndProcedure
 
+Procedure SelectNextTile(Direction.a)
+  If DragTile<>-1
+    Protected NewTile.a=DragTile,Rot.a
+    SelectElement(Tiles(),DragTile)
+    Rot=Tiles()\DragRot
+    Repeat
+      If Direction
+        Select NewTile
+          Case 3
+            NewTile=4
+          Case 4
+            NewTile=7
+          Case 5
+            NewTile=6
+          Case 6
+            NewTile=8
+          Case 7
+            NewTile=5
+          Case 8
+            NewTile=10
+          Case 9
+            NewTile=3
+          Case 10
+            NewTile=9
+        EndSelect
+      Else
+        Select NewTile
+          Case 3
+            NewTile=9
+          Case 4
+            NewTile=3
+          Case 5
+            NewTile=7
+          Case 6
+            NewTile=5
+          Case 7
+            NewTile=4
+          Case 8
+            NewTile=6
+          Case 9
+            NewTile=10
+          Case 10
+            NewTile=8
+        EndSelect
+      EndIf
+      SelectElement(Tiles(),NewTile)
+      If NewTile<>DragTile And Tiles()\NowX=-1
+        Break
+      EndIf
+    Until NewTile=DragTile
+    If NewTile<>DragTile
+      DragTile=NewTile
+      Tiles()\DragRot=Rot
+      Draw(#False)
+    EndIf
+  EndIf
+EndProcedure
+
 Procedure LoadProgress()
   If FileSize(SaveFile$)>=0
-    Protected File=ReadFile(#PB_Any,SaveFile$),Difficulty.a,Count.w,Counter
+    Protected File=ReadFile(#PB_Any,SaveFile$),ID.l
     If File
       Language=ReadByte(File)
-      For Difficulty=0 To 3
-        Count=ReadWord(File)
-        Counter=0
+      While Not Eof(File)
+        ID=ReadLong(File)
         ForEach Tasks()
-          If Tasks()\Difficulty=Difficulty
+          If Tasks()\ID=ID
             Tasks()\State=ReadByte(File)
             Tasks()\BestTime=ReadLong(File)
-            Count+1
-            If Count=Counter
-              Break
-            EndIf
+            Break
           EndIf
         Next
-      Next
-    CloseFile(File)
+      Wend
+      CloseFile(File)
     EndIf
   EndIf
 EndProcedure
 
 Procedure SaveProgress()
-  Protected File=CreateFile(#PB_Any,SaveFile$),Difficulty.a,Count.w,Seek.l
+  Protected File=CreateFile(#PB_Any,SaveFile$)
   If File
     WriteByte(File,1-Language)
-    For Difficulty=0 To 3
-      Count=0
-      Seek=Loc(File)
-      WriteWord(File,0)
-      ForEach Tasks()
-        If Tasks()\Difficulty=Difficulty
-          WriteByte(File,Tasks()\State)
-          WriteLong(File,Tasks()\BestTime)
-          Count+1
-        EndIf
-      Next
-      FileSeek(File,Seek)
-      WriteWord(File,Count)
-      FileSeek(File,Lof(File))
+    ForEach Tasks()
+      If Tasks()\State
+        WriteLong(File,Tasks()\ID)
+        WriteByte(File,Tasks()\State)
+        WriteLong(File,Tasks()\BestTime)
+      EndIf
     Next
     CloseFile(File)
   Else
@@ -766,7 +838,7 @@ Procedure.s Progress()
   ProcedureReturn Str(Round(100*Prog/ListSize(Tasks()),#PB_Round_Down))
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,700,630,"PureMondrian 1.2.2",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+OpenWindow(#MainWindow,0,0,700,630,"PureMondrian 1.3.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
 CompilerIf #PB_Compiler_OS=#PB_OS_Windows
   Background.l = GetSysColor_(#COLOR_BTNFACE)
 CompilerElse
@@ -811,9 +883,9 @@ BlackWhite(#Image_ResetBW,?I_Refresh)
 DrawTools()
 LoadTasks()
 LoadProgress()
-LoadList(0)
+LoadNextTask()
 AddWindowTimer(#MainWindow,1,100)
-AddKeyboardShortcut(#MainWindow,#PB_Shortcut_Control|#PB_Shortcut_Alt|#PB_Shortcut_Shift|#PB_Shortcut_Add,1)
+AddKeyboardShortcut(#MainWindow,458859,1)
 PostEvent(#PB_Event_Gadget,#MainWindow,#Language,#PB_EventType_LeftClick)
 
 Repeat
@@ -986,13 +1058,14 @@ Repeat
                     *Task\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
                     *Task\BestTime=BestTime
+                    If Language
+                      SetGadgetText(#Progress,"Progress: "+Progress()+"%")
+                    Else
+                      SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
+                    EndIf
                   EndIf
                   DrawTools()
-                  If Language
-                    SetGadgetText(#Progress,"Progress: "+Progress()+"%")
-                  Else
-                    SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
-                  EndIf
+                  SaveProgress()
                   WinThread=CreateThread(@Animation(),WinAnim)
                 EndIf
               EndIf
@@ -1040,6 +1113,16 @@ Repeat
                 Draw(#False)
               EndIf
           EndSelect
+        Case #PB_EventType_MiddleButtonDown
+          Select EventGadget()
+            Case #Canvas
+              SelectNextTile(#False)
+          EndSelect
+        Case #PB_EventType_MouseWheel
+          Select EventGadget()
+            Case #Canvas
+              SelectNextTile(Bool(GetGadgetAttribute(#Canvas,#PB_Canvas_WheelDelta)<0))
+            EndSelect
         Case #PB_EventType_Change
           Select EventGadget()
             Case #List
@@ -1067,12 +1150,15 @@ Repeat
               Select GetGadgetAttribute(#Canvas,#PB_Canvas_Key)
                 Case #PB_Shortcut_R
                   PostEvent(#PB_Event_Gadget,#MainWindow,#Canvas,#PB_EventType_RightClick)
+                Case #PB_Shortcut_S
+                  SelectNextTile(#False)
+                Case #PB_Shortcut_A
+                  SelectNextTile(#True)
               EndSelect
           EndSelect
       EndSelect
   EndSelect
 ForEver
-SaveProgress()
 
 DataSection;Predefined Riddles
   Tasks:
@@ -1099,6 +1185,28 @@ DataSection;Predefined Riddles
   Data.a 0,7,7,2,4,0,3,7,0
   Data.a 0,7,3,4,3,0,2,0,0
   Data.a 0,1,2,5,4,0,2,0,0
+  Data.a 0,5,4,0,2,0,2,1,0
+  Data.a 0,6,3,1,3,1,0,2,0
+  Data.a 0,7,0,0,1,0,4,5,0
+  Data.a 0,4,6,3,4,0,5,0,1
+  Data.a 0,1,0,6,7,0,2,2,0
+  Data.a 0,1,5,0,2,0,5,4,0
+  Data.a 0,2,3,5,1,1,6,1,1
+  Data.a 0,2,4,4,5,0,4,1,1
+  Data.a 0,1,4,5,3,0,2,2,0
+  Data.a 0,3,6,4,2,1,3,5,0
+  Data.a 0,5,2,1,3,1,1,2,0
+  Data.a 0,1,4,3,3,0,3,5,0
+  Data.a 0,6,0,4,5,0,4,1,0
+  Data.a 0,3,7,2,4,1,6,4,1
+  Data.a 0,1,5,1,2,1,5,3,0
+  Data.a 0,0,1,5,4,1,2,2,1
+  Data.a 0,2,2,4,2,1,1,0,1
+  Data.a 0,4,1,6,6,0,4,0,0
+  Data.a 0,3,7,5,6,0,2,4,0
+  Data.a 0,4,1,4,3,1,5,5,0
+  Data.a 0,2,4,1,1,0,2,5,0
+  Data.a 0,5,0,2,5,1,3,1,0
   ;Medium
   Data.a 1,4,2,5,3,1,1,2,0
   Data.a 1,2,1,3,1,1,0,5,1
@@ -1122,6 +1230,28 @@ DataSection;Predefined Riddles
   Data.a 1,3,0,0,2,0,5,3,0
   Data.a 1,4,4,3,1,0,0,1,0
   Data.a 1,5,5,3,1,0,0,1,0
+  Data.a 1,6,3,3,7,0,4,2,0
+  Data.a 1,5,1,7,4,1,4,1,1
+  Data.a 1,3,3,0,3,0,7,3,1
+  Data.a 1,5,7,2,6,1,3,2,1
+  Data.a 1,3,5,1,0,0,1,4,0
+  Data.a 1,0,5,2,0,1,7,1,1
+  Data.a 1,3,1,0,6,1,1,7,0
+  Data.a 1,4,2,6,3,1,3,3,1
+  Data.a 1,1,2,1,3,1,3,5,0
+  Data.a 1,7,3,4,0,1,5,4,0
+  Data.a 1,2,4,2,1,0,4,5,1
+  Data.a 1,7,5,2,2,0,4,3,0
+  Data.a 1,4,2,2,6,1,5,4,1
+  Data.a 1,2,4,3,6,1,0,2,0
+  Data.a 1,1,2,1,3,1,5,0,1
+  Data.a 1,0,4,4,1,0,4,5,1
+  Data.a 1,2,2,3,2,0,1,5,1
+  Data.a 1,5,3,2,4,1,4,3,1
+  Data.a 1,3,4,5,6,1,2,3,0
+  Data.a 1,5,3,2,0,0,5,5,1
+  Data.a 1,0,0,2,6,1,7,4,1
+  Data.a 1,4,3,2,6,1,2,4,0
   ;Hard
   Data.a 2,3,1,5,4,1,0,5,1
   Data.a 2,5,5,6,3,0,3,4,0
@@ -1130,7 +1260,7 @@ DataSection;Predefined Riddles
   Data.a 2,4,3,0,4,0,0,0,0
   Data.a 2,6,3,2,2,0,7,3,1
   Data.a 2,0,0,7,4,1,3,5,1
-  Data.a 2,5,3,5,2,1,2,0,0
+  Data.a 2,5,0,5,2,1,2,0,0
   Data.a 2,4,5,7,2,1,0,2,1
   Data.a 2,3,3,4,6,1,3,0,0
   Data.a 2,2,4,3,2,1,0,3,0
@@ -1145,6 +1275,29 @@ DataSection;Predefined Riddles
   Data.a 2,5,3,3,2,0,0,4,0
   Data.a 2,6,3,3,4,1,4,4,0
   Data.a 2,3,4,0,2,1,7,3,1
+  
+  Data.a 2,5,4,3,2,1,2,2,1
+  Data.a 2,2,5,4,3,0,0,0,0
+  Data.a 2,5,3,0,0,1,5,5,0
+  Data.a 2,4,2,5,4,1,0,3,1
+  Data.a 2,2,5,3,7,0,5,5,1
+  Data.a 2,5,5,2,0,0,2,1,1
+  Data.a 2,3,5,6,0,0,3,2,0
+  Data.a 2,3,4,6,3,0,4,4,1
+  Data.a 2,0,7,0,3,1,5,2,1
+  Data.a 2,4,0,4,7,0,5,4,0
+  Data.a 2,4,7,0,6,1,5,3,0
+  Data.a 2,3,5,6,0,0,2,3,0
+  Data.a 2,7,7,3,6,1,4,4,0
+  Data.a 2,6,4,0,3,0,2,7,0
+  Data.a 2,2,1,0,6,1,4,5,1
+  Data.a 2,2,3,7,4,1,0,4,0
+  Data.a 2,3,2,2,4,1,5,5,0
+  Data.a 2,7,0,0,0,0,1,5,0
+  Data.a 2,7,4,6,3,0,3,5,1
+  Data.a 2,4,1,6,4,0,5,3,0
+  Data.a 2,2,7,4,2,0,5,7,0
+  Data.a 2,3,2,0,7,0,0,4,1
   ;Master
   Data.a 3,5,5,3,0,1,0,7,0
   Data.a 3,4,2,6,5,0,2,7,0
@@ -1168,6 +1321,28 @@ DataSection;Predefined Riddles
   Data.a 3,2,4,7,3,1,5,5,0
   Data.a 3,2,2,0,6,1,5,4,0
   Data.a 3,2,6,0,3,1,0,7,0
+  Data.a 3,3,5,6,0,0,0,2,0
+  Data.a 3,5,3,3,4,1,5,7,0
+  Data.a 3,2,3,0,6,1,0,0,0
+  Data.a 3,2,4,4,2,0,2,3,0
+  Data.a 3,4,5,5,2,1,2,4,0
+  Data.a 3,2,1,5,6,1,0,0,0
+  Data.a 3,4,2,5,4,1,7,0,1
+  Data.a 3,4,5,4,3,1,2,2,0
+  Data.a 3,5,2,0,4,0,0,5,1
+  Data.a 3,2,2,3,4,0,4,5,1
+  Data.a 3,3,3,7,6,1,3,0,0
+  Data.a 3,4,4,6,7,0,7,2,1
+  Data.a 3,2,3,0,6,1,7,2,1
+  Data.a 3,4,4,6,7,0,7,0,1
+  Data.a 3,5,4,2,5,0,5,3,0
+  Data.a 3,5,1,0,0,1,3,0,0
+  Data.a 3,4,0,2,2,1,3,4,0
+  Data.a 3,2,7,7,2,1,0,0,0
+  Data.a 3,3,2,5,4,1,2,7,0
+  Data.a 3,4,5,3,6,1,5,0,0
+  Data.a 3,3,4,4,7,0,0,2,1
+  Data.a 3,3,2,5,6,1,0,5,0
   TasksEnd:
 EndDataSection
 DataSection;Icons
