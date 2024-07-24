@@ -1,4 +1,4 @@
-;PureMondrian 1.4.0 by Jac de Lad
+;PureMondrian 1.4.1 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -79,7 +79,7 @@ Structure Task
   ID.l
 EndStructure
 
-Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1
+Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1,Button.l
 If Not FileSize(SaveDir$)=-2
   CreateDirectory(SaveDir$)
 EndIf
@@ -248,9 +248,12 @@ Procedure DrawTools()
     Protected VT$,Time.l,TM.a
     VectorFont(FontID(VFont),20)
     If Timer=1
-      Time=(ElapsedMilliseconds()-InitTimer)
+      Time=ElapsedMilliseconds()-InitTimer
     ElseIf Timer=2
-      Time=(EndTimer-InitTimer)
+      Time=EndTimer-InitTimer
+    EndIf
+    If Time>600000 And InitTimer And Not Solved
+      SolveMode=#True
     EndIf
     If BestTime=0 Or InitTimer=0
       VectorSourceColor($FF000000)
@@ -881,7 +884,7 @@ Procedure DrawProgress()
   StopDrawing()
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.4.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.4.1",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
 CompilerIf #PB_Compiler_OS=#PB_OS_Windows
   Background.l = GetSysColor_(#COLOR_BTNFACE)
 CompilerElse
@@ -994,9 +997,17 @@ Repeat
             Case #CanvasTools
               Select Tool
                 Case 1;Solve
+                  If Language
+                    Button=MessageRequester("Auto solve","Are you sure that you want to solve the puzzle?",#PB_MessageRequester_Warning)
+                  Else
+                    Button=MessageRequester("Automatische Lösung","Sind sie sicher, dass sie das Rätsel automatisch lösen lassen wollen?",#PB_MessageRequester_Warning)
+                  EndIf
+                  If Button=#PB_MessageRequester_Yes
                   Solve()
+                  SolveMode=#False
+                  EndIf
                 Case 2;Reset
-                  PostEvent(#PB_Event_Gadget,#MainWindow,#list,#PB_EventType_Change)
+                  PostEvent(#PB_Event_Gadget,#MainWindow,#List,#PB_EventType_Change)
                 Case 3;ARotate
                   Rotate(0)
                 Case 4;Rotate
@@ -1091,12 +1102,13 @@ Repeat
                   *Task\State=#True
                   SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Task\DoneImage))
                   Timer=2
-                  If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0 And Not SolveMode
+                  If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0
                     *Task\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
                     *Task\BestTime=BestTime
                     Progress()
                   EndIf
+                  SolveMode=#False
                   DrawTools()
                   DrawProgress()
                   SaveProgress()
@@ -1184,6 +1196,7 @@ Repeat
                 BestTime=*Task\BestTime
                 Timer=1
               EndIf
+              SolveMode=#False
               DrawTools()
           EndSelect
         Case #PB_EventType_KeyDown
