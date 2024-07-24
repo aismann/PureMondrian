@@ -998,9 +998,9 @@ Repeat
               Select Tool
                 Case 1;Solve
                   If Language
-                    Button=MessageRequester("Auto solve","Are you sure that you want to solve the puzzle?",#PB_MessageRequester_Warning)
+                    Button=MessageRequester("Auto solve","Are you sure that you want to solve the puzzle?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Warning)
                   Else
-                    Button=MessageRequester("Automatische Lösung","Sind sie sicher, dass sie das Rätsel automatisch lösen lassen wollen?",#PB_MessageRequester_Warning)
+                    Button=MessageRequester("Automatische Lösung","Sind sie sicher, dass sie das Rätsel automatisch lösen lassen wollen?",#PB_MessageRequester_YesNo|#PB_MessageRequester_Warning)
                   EndIf
                   If Button=#PB_MessageRequester_Yes
                   Solve()
