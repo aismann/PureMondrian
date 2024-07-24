@@ -1,4 +1,4 @@
-;PureMondrian 1.3.0 by Jac de Lad
+;PureMondrian 1.4.0 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -10,11 +10,8 @@ Enumeration Gadget
   #Canvas
   #CanvasTools
   #List
-  #InternetButton
   #RandomButton
   #InfoButton
-  #Difficulty
-  #Language
   #Progress
 EndEnumeration
 Enumeration Image
@@ -27,6 +24,15 @@ Enumeration Image
   #Image_Reset
   #Image_ResetBW
   #Image_Done
+  #Image_Lock
+  #Image_Complete
+  #Image_Language
+  #Image_Control
+  #Image_Internet
+EndEnumeration
+Enumeration Menu
+  #Menu_DE
+  #Menu_EN
 EndEnumeration
 
 Structure Occupied
@@ -81,7 +87,7 @@ Structure Task
   ID.l
 EndStructure
 
-Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),BestTime.l,SolveMode.a
+Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1
 If Not FileSize(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")=-2
   CreateDirectory(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")
 EndIf
@@ -311,11 +317,8 @@ Procedure Animation(Anim)
       StopDrawing()
     EndIf
     Frame+1
-    If Frame>=ImageFrameCount(Anim) Or Solved=#False
-      Break
-    EndIf
     Delay(GetImageFrameDelay(Anim))
-  ForEver
+  Until Frame>=ImageFrameCount(Anim) Or Solved=#False
   If Solved=#False
     Draw(0)
   EndIf
@@ -509,20 +512,31 @@ Procedure LoadList(Difficulty)
       Else
         Image=Tasks()\Image
       EndIf
-      If Language
-        AddGadgetItem(#List,-1,"Riddle "+Str(ListIndex(Tasks())+1),ImageID(Image))
-      Else
-        AddGadgetItem(#List,-1,"Rätsel "+Str(ListIndex(Tasks())+1),ImageID(Image))
-      EndIf
+      AddGadgetItem(#List,-1,"Puzzle "+Str(ListIndex(Tasks())+1),ImageID(Image))
       SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Tasks())
     EndIf
   Next
-  StartDrawing(CanvasOutput(#Canvas))
-  Box(0,0,OutputWidth(),OutputHeight(),Background)
-  StopDrawing()
+  StartVectorDrawing(CanvasVectorOutput(#Canvas))
+  VectorSourceColor(Background)
+  FillVectorOutput()
+  StopVectorDrawing()
   DrawTools()
 EndProcedure
 
+Macro DrawMiniTiles()
+  Box(2,2,8*Size,8*Size,Background)
+  Box(2+Tasks()\Tile1X*Size,2+Tasks()\Tile1Y*Size,Size,Size,#Black)
+  If Tasks()\Tile2R
+    Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size,Size*2,#Black)
+  Else
+    Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size*2,Size,#Black)
+  EndIf
+  If Tasks()\Tile3R
+    Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size,Size*3,#Black)
+  Else
+    Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size*3,Size,#Black)
+  EndIf
+EndMacro
 Procedure LoadTasks()
   Protected *Mem=?Tasks,Size.a=4
   Repeat
@@ -537,36 +551,15 @@ Procedure LoadTasks()
     Tasks()\Tile3Y=PeekA(*Mem+7)
     Tasks()\Tile3R=PeekA(*Mem+8)
     Tasks()\ID=Val(Str(Tasks()\Difficulty)+Str(Tasks()\Tile1X)+Str(Tasks()\Tile1Y)+Str(Tasks()\Tile2X)+Str(Tasks()\Tile2Y)+Str(Tasks()\Tile2R)+Str(Tasks()\Tile3X)+Str(Tasks()\Tile3Y)+Str(Tasks()\Tile3R))
+    TCount(Tasks()\Difficulty)=TCount(Tasks()\Difficulty)+1
     Tasks()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,24,#Blue)
     StartDrawing(ImageOutput(Tasks()\Image))
-    Box(2,2,8*Size,8*Size,Background)
-    Box(2+Tasks()\Tile1X*Size,2+Tasks()\Tile1Y*Size,Size,Size,#Black)
-    If Tasks()\Tile2R
-      Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size,Size*2,#Black)
-    Else
-      Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size*2,Size,#Black)
-    EndIf
-    If Tasks()\Tile3R
-      Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size,Size*3,#Black)
-    Else
-      Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size*3,Size,#Black)
-    EndIf
+    DrawMiniTiles()
     StopDrawing()
     
     Tasks()\DoneImage=CreateImage(#PB_Any,8*Size+4,8*Size+4,24,#Green)
     StartDrawing(ImageOutput(Tasks()\DoneImage))
-    Box(2,2,8*Size,8*Size,Background)
-    Box(2+Tasks()\Tile1X*Size,2+Tasks()\Tile1Y*Size,Size,Size,#Black)
-    If Tasks()\Tile2R
-      Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size,Size*2,#Black)
-    Else
-      Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size*2,Size,#Black)
-    EndIf
-    If Tasks()\Tile3R
-      Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size,Size*3,#Black)
-    Else
-      Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size*3,Size,#Black)
-    EndIf
+    DrawMiniTiles()
     DrawingMode(#PB_2DDrawing_AlphaBlend)
     DrawImage(ImageID(#Image_Done),0,0)
     StopDrawing()
@@ -627,11 +620,12 @@ Procedure LoadTask(Task)
 EndProcedure
 
 Procedure LoadNextTask()
-  Protected Done.a,X.w,*Task
+  Protected Done.a,X.w,*Task.Task
   ForEach Tasks()
     If Tasks()\State=#False
       *Task=@Tasks()
       LoadList(Tasks()\Difficulty)
+      Difficulty=*Task\Difficulty
       For X=0 To CountGadgetItems(#List)-1
         If GetGadgetItemData(#List,X)=*Task
           SetGadgetState(#List,X)
@@ -665,10 +659,10 @@ Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
         TY=Tiles()\Position()\Y
         Tiles()\Position()\X=7-TY
         Tiles()\Position()\Y=TX
-          If Tiles()\Position()\Rot
-            Tiles()\Position()\X=Tiles()\Position()\X+1-Tiles()\X
-          EndIf
-          Tiles()\Position()\Rot=1-Tiles()\Position()\Rot
+        If Tiles()\Position()\Rot
+          Tiles()\Position()\X=Tiles()\Position()\X+1-Tiles()\X
+        EndIf
+        Tiles()\Position()\Rot=1-Tiles()\Position()\Rot
         If Tiles()\Position()\Rot
           Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\Y-1
           Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\X-1
@@ -695,10 +689,10 @@ Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
         TY=Tiles()\Position()\Y
         Tiles()\Position()\X=TY
         Tiles()\Position()\Y=7-TX
-          If Not Tiles()\Position()\Rot
-            Tiles()\Position()\Y=Tiles()\Position()\Y+1-Tiles()\X
-          EndIf
-          Tiles()\Position()\Rot=1-Tiles()\Position()\Rot
+        If Not Tiles()\Position()\Rot
+          Tiles()\Position()\Y=Tiles()\Position()\Y+1-Tiles()\X
+        EndIf
+        Tiles()\Position()\Rot=1-Tiles()\Position()\Rot
         If Tiles()\Position()\Rot
           Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\Y-1
           Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\X-1
@@ -806,7 +800,6 @@ Procedure LoadProgress()
     EndIf
   EndIf
 EndProcedure
-
 Procedure SaveProgress()
   Protected File=CreateFile(#PB_Any,SaveFile$)
   If File
@@ -828,17 +821,75 @@ Procedure SaveProgress()
   EndIf
 EndProcedure
 
-Procedure.s Progress()
-  Protected Prog
+Procedure Progress()
+  PProgress(0)=0
+  PProgress(1)=0
+  PProgress(2)=0
+  PProgress(3)=0
   ForEach Tasks()
     If Tasks()\State
-      Prog+1
+      PProgress(Tasks()\Difficulty)=PProgress(Tasks()\Difficulty)+1
     EndIf
   Next
-  ProcedureReturn Str(Round(100*Prog/ListSize(Tasks()),#PB_Round_Down))
+  Progress=Round(100*(PProgress(0)+PProgress(1)+PProgress(2)+PProgress(3))/ListSize(Tasks()),#PB_Round_Down)
+EndProcedure
+Procedure DrawProgress()
+  Protected Text$=Str(Progress)+"%",Count.a,Diff$,MX.l,MY.l
+  MX=DesktopUnscaledX(WindowMouseX(#MainWindow))-GadgetX(#Progress)
+  MY=DesktopUnscaledY(WindowMouseY(#MainWindow))
+  If MX>=0 And MY>=0 And MX<=GadgetWidth(#Progress) And MY<=GadgetHeight(#Progress)
+    ProgButton=MX/60-1
+  Else
+    ProgButton=-1
+  EndIf
+  If Language
+    Diff$="Easy,Medium,Hard,Master,Total"
+  Else
+    Diff$="Einfach,Mittel,Schwer,Meister,Gesamt"
+  EndIf
+  StartDrawing(CanvasOutput(#Progress))
+  Box(0,0,300,40,Background)
+  DrawingMode(#PB_2DDrawing_Transparent)
+  DrawingFont(FontID(PFont))
+  DrawText(30-0.5*TextWidth(Text$),6,Text$,#Blue)
+  DrawingFont(FontID(PTFont))
+  Text$=StringField(Diff$,5,",")
+  DrawText(30-0.5*TextWidth(Text$),22,Text$,#Blue)
+  RoundBox(62+Difficulty*60,2,56,36,4,4,#Green)
+  
+  For Count=0 To 3
+    DrawingFont(FontID(PFont))
+    If Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)
+      DrawingMode(#PB_2DDrawing_AlphaBlend)
+      DrawImage(ImageID(#Image_Lock),60*(Count+1)+22,6)
+      DrawingMode(#PB_2DDrawing_Transparent)
+      DrawingFont(FontID(PTFont))
+      Text$=StringField(Diff$,Count+1,",")
+      DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,#Gray)
+    Else
+      If ProgButton<>Difficulty And ProgButton=Count
+        DrawingMode(#PB_2DDrawing_Transparent)
+        RoundBox(62+Count*60,2,56,36,4,4,#Gray)
+      EndIf
+      If PProgress(Count)=TCount(Count)
+        DrawingMode(#PB_2DDrawing_AlphaBlend)
+        DrawImage(ImageID(#Image_Complete),60*(Count+1)+22,6)
+      Else
+        DrawingMode(#PB_2DDrawing_Transparent)
+        Text$=Str(100*PProgress(Count)/TCount(Count))+"%"
+        DrawText(60*(Count+1)+30-0.5*TextWidth(Text$),6,Text$,#Black)
+      EndIf
+      DrawingFont(FontID(PTFont))
+      DrawingMode(#PB_2DDrawing_Transparent)
+      Text$=StringField(Diff$,Count+1,",")
+      DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,#Black)
+    EndIf
+  Next
+  
+  StopDrawing()
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,700,630,"PureMondrian 1.3.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.4.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
 CompilerIf #PB_Compiler_OS=#PB_OS_Windows
   Background.l = GetSysColor_(#COLOR_BTNFACE)
 CompilerElse
@@ -854,23 +905,18 @@ CanvasGadget(#CanvasTools,0,WindowHeight(#MainWindow)-54,400,54)
 StartDrawing(CanvasOutput(#Canvas))
 Box(0,0,OutputWidth(),OutputHeight(),Background)
 StopDrawing()
-TextGadget(#Progress,400,5,300,25,"Fortschritt: -",#PB_Text_Center)
-ListIconGadget(#List,400,30,300,570,"Riddle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
+ButtonImageGadget(#InfoButton,400,0,40,40,ImageID(CatchImage(#PB_Any,?I_Info)))
+CanvasGadget(#Progress,440,0,300,40)
+ButtonImageGadget(#RandomButton,740,0,40,40,ImageID(CatchImage(#PB_Any,?I_Dice)))
+ListIconGadget(#List,400,40,380,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
 SetGadgetAttribute(#List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
-ComboBoxGadget(#Difficulty,400,600,150,30)
-AddGadgetItem(#Difficulty,-1,"Einfach")
-AddGadgetItem(#Difficulty,-1,"Mittel")
-AddGadgetItem(#Difficulty,-1,"Schwer")
-AddGadgetItem(#Difficulty,-1,"Meister")
-SetGadgetState(#Difficulty,0)
-ButtonImageGadget(#RandomButton,550,600,30,30,ImageID(CatchImage(#PB_Any,?I_Dice)))
-ButtonImageGadget(#Language,610,600,30,30,ImageID(CatchImage(#PB_Any,?I_Language)))
-ButtonImageGadget(#InfoButton,640,600,30,30,ImageID(CatchImage(#PB_Any,?I_Info)))
-ButtonImageGadget(#InternetButton,670,600,30,30,ImageID(CatchImage(#PB_Any,?I_Internet)))
-GadgetToolTip(#Language,"Sprache")
 GadgetToolTip(#InfoButton,"Information")
-GadgetToolTip(#InternetButton,"Offizieller PureBasic-Thread")
-GadgetToolTip(#RandomButton,"Zufälliges Rätsel")
+GadgetToolTip(#RandomButton,"Zufälliges Puzzle")
+CatchImage(#Image_Language,?I_Language)
+CatchImage(#Image_Control,?I_Control)
+CatchImage(#Image_Internet,?I_Internet)
+CatchImage(#Image_Lock,?I_Lock)
+CatchImage(#Image_Complete,?I_Complete)
 CatchImage(#Image_Done,?I_Done)
 CatchImage(#Image_Rotate,?I_Rotate)
 CatchImage(#Image_ARotate,?I_ARotate)
@@ -884,9 +930,24 @@ DrawTools()
 LoadTasks()
 LoadProgress()
 LoadNextTask()
+Progress()
+DrawProgress()
+
+CreatePopupImageMenu(#Menu_DE)
+MenuItem(1,"English",ImageID(#Image_Language))
+MenuItem(2,"Wie man spielt",ImageID(#Image_Control))
+MenuBar()
+MenuItem(3,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
+
+CreatePopupImageMenu(#Menu_EN)
+MenuItem(1,"Deutsch",ImageID(#Image_Language))
+MenuItem(2,"How to play",ImageID(#Image_Control))
+MenuBar()
+MenuItem(3,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
+
 AddWindowTimer(#MainWindow,1,100)
-AddKeyboardShortcut(#MainWindow,458859,1)
-PostEvent(#PB_Event_Gadget,#MainWindow,#Language,#PB_EventType_LeftClick)
+AddKeyboardShortcut(#MainWindow,458859,999)
+PostEvent(#PB_Event_Menu,#MainWindow,1)
 
 Repeat
   Select WaitWindowEvent()
@@ -895,7 +956,31 @@ Repeat
     Case #PB_Event_Menu
       Select EventMenu()
         Case 1
-          SolveMode=#True
+          Language=1-Language
+          If Language
+            GadgetToolTip(#RandomButton,"Random puzzle")
+          Else  
+            GadgetToolTip(#RandomButton,"Zufälliges Puzzle")
+          EndIf
+          SaveProgress()
+          DrawProgress()
+        Case 2
+          If Language
+            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nHow to play:\r\nSelect a puzzle. Drag and drop the tiles to build a 8x8-square; the black pieces are locked. While moving a part, rotate it with the right mouse button. Remove a placed tile with a right click on it.\r\n\r\nIn case of despair, use the solve button (...which is initially hidden).",#PB_MessageRequester_Info)
+          Else
+            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nSpielanleitung:\r\nWähle ein Puzzle. Ziehe die Teile auf das 8x8-Quadrat; die schwarzen Teile sind vorgegeben. Während des Ziehens kann ein Teil mit der rechten Maustaste gedreht werden. Klicken sie mit rechts auf ein bereits platziertes Teil, um es zu entfernen.\r\n\r\nSollten sie verzweifeln, nutzen sie den Lösungsbutton (...welcher am Anfang verborgen ist).",#PB_MessageRequester_Info)
+          EndIf
+        Case 3
+          CompilerSelect #PB_Compiler_OS
+            CompilerCase #PB_OS_Windows
+              RunProgram("https://www.purebasic.fr/english/viewtopic.php?t=84627")
+            CompilerCase #PB_OS_Linux
+              RunProgram("xdg-open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
+            CompilerCase #PB_OS_MacOS
+              RunProgram("open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
+          CompilerEndSelect
+        Case 999
+          SolveMode=1-SolveMode
           DrawTools()
       EndSelect
     Case #PB_Event_Timer
@@ -910,47 +995,7 @@ Repeat
         Case #PB_EventType_LeftClick
           Select EventGadget()
             Case #InfoButton
-              If Language
-                MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nHow to play:\r\nSelect a riddle. Drag and drop the tiles to build a 8x8-square; the black pieces are locked. While moving a part, rotate it with the right mouse button. Remove a placed tile with a right click on it.\r\n\r\nIn case of despair, use the solve button.",#PB_MessageRequester_Info)
-              Else
-                MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nSpielanleitung:\r\nWähle ein Rätsel. Ziehe die Teile auf das 8x8-Quadrat; die schwarzen Teile sind vorgegeben. Während des Ziehens kann ein Teil mit der rechten Maustaste gedreht werden. Klicken sie mit rechts auf ein bereits platziertes Teil, um es zu entfernen.\r\n\r\nSollten sie verzweifeln, nutzen sie den Lösungsbutton.",#PB_MessageRequester_Info)
-              EndIf
-            Case #Language
-              Language=1-Language
-              If Language
-                GadgetToolTip(#Language,"Language")
-                GadgetToolTip(#InternetButton,"Official PureBasic thread")
-                GadgetToolTip(#RandomButton,"Random riddle")
-                SetGadgetItemText(#Difficulty,0,"Easy")
-                SetGadgetItemText(#Difficulty,1,"Medium")
-                SetGadgetItemText(#Difficulty,2,"Hard")
-                SetGadgetItemText(#Difficulty,3,"Master")
-                SetGadgetText(#Progress,"Progress: "+Progress()+"%")
-                For X=0 To CountGadgetItems(#List)-1
-                  SetGadgetItemText(#List,X,"Riddle "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
-                Next
-              Else  
-                GadgetToolTip(#Language,"Sprache")
-                GadgetToolTip(#InternetButton,"Offizieller PureBasic-Thread")
-                GadgetToolTip(#RandomButton,"Zufälliges Rätsel")
-                SetGadgetItemText(#Difficulty,0,"Einfach")
-                SetGadgetItemText(#Difficulty,1,"Mittel")
-                SetGadgetItemText(#Difficulty,2,"Schwer")
-                SetGadgetItemText(#Difficulty,3,"Meister")
-                SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
-                For X=0 To CountGadgetItems(#List)-1
-                  SetGadgetItemText(#List,X,"Rätsel "+StringField(GetGadgetItemText(#List,X,0),2," "),0)
-                Next
-              EndIf
-            Case #InternetButton
-              CompilerSelect #PB_Compiler_OS
-                CompilerCase #PB_OS_Windows
-                  RunProgram("https://www.purebasic.fr/english/viewtopic.php?t=84627")
-                CompilerCase #PB_OS_Linux
-                  RunProgram("xdg-open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
-                CompilerCase #PB_OS_MacOS
-                  RunProgram("open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
-              CompilerEndSelect
+              DisplayPopupMenu(Language,WindowID(#MainWindow))
             Case #RandomButton
               SetGadgetState(#List,Random(CountGadgetItems(#List)-1))
               PostEvent(#PB_Event_Gadget,#MainWindow,#list,#PB_EventType_Change)
@@ -1058,16 +1103,18 @@ Repeat
                     *Task\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
                     *Task\BestTime=BestTime
-                    If Language
-                      SetGadgetText(#Progress,"Progress: "+Progress()+"%")
-                    Else
-                      SetGadgetText(#Progress,"Fortschritt: "+Progress()+"%")
-                    EndIf
+                    Progress()
                   EndIf
                   DrawTools()
+                  DrawProgress()
                   SaveProgress()
                   WinThread=CreateThread(@Animation(),WinAnim)
                 EndIf
+              EndIf
+            Case #Progress
+              If ProgButton>=0 And ProgButton<=3 And ProgButton<>Difficulty And (ProgButton=0 Or PProgress(ProgButton-1)>=0.5*TCount(ProgButton-1))
+                LoadList(ProgButton)
+                Difficulty=ProgButton
               EndIf
           EndSelect
         Case #PB_EventType_MouseMove
@@ -1078,11 +1125,15 @@ Repeat
               EndIf
             Case #CanvasTools
               DrawTools()
+            Case #Progress
+              DrawProgress()
           EndSelect
         Case #PB_EventType_MouseEnter,#PB_EventType_MouseLeave
           Select EventGadget()
             Case #CanvasTools
               DrawTools()
+            Case #Progress
+              DrawProgress()
           EndSelect
         Case #PB_EventType_RightClick
           Select EventGadget()
@@ -1122,14 +1173,15 @@ Repeat
           Select EventGadget()
             Case #Canvas
               SelectNextTile(Bool(GetGadgetAttribute(#Canvas,#PB_Canvas_WheelDelta)<0))
-            EndSelect
+          EndSelect
         Case #PB_EventType_Change
           Select EventGadget()
             Case #List
               If GetGadgetState(#List)=-1
-                StartDrawing(CanvasOutput(#Canvas))
-                Box(0,0,OutputWidth(),OutputHeight(),Background)
-                StopDrawing()
+                StartVectorDrawing(CanvasVectorOutput(#Canvas))
+                VectorSourceColor(Background)
+                FillVectorOutput()
+                StopVectorDrawing()
                 Solved=#True
                 Timer=0
               Else
@@ -1141,8 +1193,6 @@ Repeat
                 Timer=1
               EndIf
               DrawTools()
-            Case #Difficulty
-              LoadList(GetGadgetState(#Difficulty))
           EndSelect
         Case #PB_EventType_KeyDown
           Select EventGadget()
@@ -1160,7 +1210,7 @@ Repeat
   EndSelect
 ForEver
 
-DataSection;Predefined Riddles
+DataSection;Predefined puzzles
   Tasks:
   ;Easy
   Data.a 0,0,1,0,4,0,5,3,1
@@ -1275,7 +1325,6 @@ DataSection;Predefined Riddles
   Data.a 2,5,3,3,2,0,0,4,0
   Data.a 2,6,3,3,4,1,4,4,0
   Data.a 2,3,4,0,2,1,7,3,1
-  
   Data.a 2,5,4,3,2,1,2,2,1
   Data.a 2,2,5,4,3,0,0,0,0
   Data.a 2,5,3,0,0,1,5,5,0
@@ -1345,22 +1394,28 @@ DataSection;Predefined Riddles
   Data.a 3,3,2,5,6,1,0,5,0
   TasksEnd:
 EndDataSection
-DataSection;Icons
-  ;All icons are distributed under licenses which allow me to use them for non-commercial projects!
+DataSection;Icons (all icons are distributed under licenses which allow me to use them for non-commercial projects!)
   
   ;The following icons are used form the icon set "Farm Fresh Icons": https://fatcow.com/free-icons
-  I_Rotate:   : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$58457419000000C6,$72617774666F5374,$2065626F64410065,$6165526567616D49,$00003C65C9717964,$704745544C500003,$000000000000004C,$0000000000000000,$0000000000000000,$0000000000000000,$00773E0000000000,$0000000000000000,$0300854300000000,$0000000000000006,$0000008245008847,$44006F3B003D2100,$007F43002B170081,$8244007B4100723D,$37000000007F4300,$0087440083460068,$140B004223008745,$4500552E006A3A00,$002E1900723E007F,$8747008044007840,$10000000001D0F00,$007B43004023001D,$5E3200522C00552E,$4100844700180D00,$008948004B280079,$8443005B30004A28,$41005E3300733D00,$008949005930007D,$8A4A000000008544,$4C00884500874600,$00864300BF98008D,$8847008C4A00C79B,$9D00C19800DB9900,$00DD9A00894800E0,$D9A002D49E008746,$9A00D098008A4800,$00C59800D49900CB,$C09900C99B00C59A,$A098E6E000874200,$00D89900D09C00D7,$DB9700CB9900CC9B,$9800CF9800C89900,$00CA9C0B9E6200CC,$E8DF8EE6D800C29B,$A600B1741AC5A79D,$00BF7F00D1A009DF,$DE9E01D29D00C17F,$4F00D39C00E3A100,$00DB9E00D897028F,$E7C80FD4A300CD9A,$B116DEA610D6A361,$00D19906C89E2CCE,$B89007C39F8DEAD6,$4C43D4B80FCDA244,$00C3998DE2D5008C,$B18757D6C100A67E,$B839CDB399E9DD3A,$0091510088436DCF,$D095009B5D009C5D,$8108B97A08C98F00,$00CE9B04AE7000B7,$DBA620B67E03E5A4,$AE14E3A622D39A0A,$02D89718E9AE11EC,$E9B400BB802CD8B8,$9A86F4D868DAB435,$3FCBA453E9BF00D2,$D69B97F6DA03D498,$A800E8A600834200,$00C9861EAE7C13D9,$B8867CF1D45CEAC2,$8033E0B000BE813A,$26C5A21BAE8000C2,$B27823CDA717C99B,$970CAF7323D2AD09,$38D3B73ED4B600D5,$EACB4DDBBF36BC8D,$A203CE9C14D6A469,$38D8B373EDD00CCF,$DAA31CD6AC65DBB9,$AA00B08111955915,$8DF2D38AE3CE23D5,$CAA196EADC1ECCA9,$C296F3DC66E5C607,$78DFC18CEDD678DA,$BE905AD8C075E4CD,$C043E6B612955944,$31CEB029E0B050E4,$BC9257D9B93CE2B9,$B690E8D956E1C02D,$81E7D31FB3803ED8,$D9C28CE7D830BC93,$C797E7DB78DAC16E,$1C9F692FB38762DD,$AA8760D9C600AC7F,$9700823B00894400,$82DFD65AD4C600B9,$3AD47BDFD994E4D7,$52744B000000EC69,$0C0214430E00534E,$C21B1F1201041506,$283140AE32082E23,$DB58E9B36A394BF8,$E5340F1161B2BFAF,$52B5C45F424B6BAC,$C7183B4836B3A1AD,$E75652AF48857773,$C04E9F2821E14715,$76DCBCF69AB31796,$4144496502000018,$701A206063CB3854,$9C4C4C494D79AB8A,$7BCC5A558CA9EAA2,$5BC13C981024E4C2,$4F477FAB8709430D,$FD49C2C2C2A4FF7E,$E55139C5123A7A9F,$909795DF7C7E1F6D,$75D79414141BD090,$8B3C920B22BFB6FD,$FCE3633AF72BC5D5,$3333E3E373A2FCFC,$475A705590DADB3B,$A537375D9759BB9E,$2B25253C393924BC,$02B83B5F5DCEEB2B,$ABABADE10D63B101,$34569D4FA68AA392,$07ADE34C4C436223,$34D7AB3403301C0A,$494B7A945606A4D5,$66870697794A4BAA,$C055026DEABA3C64,$70684646457F30A6,$889F371F088CB499,$FAC646607069748C,$2E16C5182350FA1D,$CDCC2DDA58AD0C0A,$BDEBADC8C6C1C6C8,$56554ADB66B536AE,$2B2AF3C590E60288,$9E790366E392CC97,$C386D350EE5B8D93,$8768154172F956BB,$42316BF805858584,$E62624F39368C4DD,$A8AB0088765F76C2,$1CC1B0F048101330,$19E4EA35ACF392E5,$12E01076560E0298,$ACE3CE7D872E8580,$CD8018053013FAAC,$610DCBF4F4CBCDF9,$70B641BC3C380AE8,$7679999D7F3E453A,$FE1FA116029A2CAD,$5B6F17874779404A,$9342E3D16F8EFD62,$2DC5455DD3FFFBEF,$8ED7BD41A7ABDDF2,$FBF9FFC9A2B21B78,$4FF90F97EBFBB12B,$E1E791EE8FDA127D,$82BFF7FDF6FF9140,$7C7DDBF7F9898282,$BB22331806F79AF2,$88101F04E7D2E0CF,$CDBDFB8396B88205,$9803765C8D600C50,$A3D3D3D2E2E2FC5C,$8027C16DE7DF9F4F,$D16925D9F92E02EC,$37EBC3CAA76969D1,$4945651731081E37,$C2AB93CBBCFCAC95,$E39CCF1714179393,$461A82CAC7C96BCD,$86362B6B3BBC82CC,$F08868EAC8040405,$C5500B2285A27008,$12C24C4C46014DEE,$520011981C8C3CFC,$1CAC6B14145FD5B1,$1D9AB4C2A808A358,$C257E7E76164E65F,$4818D91958397D9B,$B95F1DC4CE890006,$4549000000004E22:Data.b $4E,$44,$AE,$42,$60,$82
-  I_ARotate:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$58457419000000C6,$72617774666F5374,$2065626F64410065,$6165526567616D49,$00003C65C9717964,$704745544C500003,$000000000000004C,$0000000000000000,$0000000000000000,$0000000000000000,$0000000086440000,$000000000000773E,$0000000000884700,$0000000000000000,$3D21000000008043,$17006F3B00000000,$000804000000002B,$8948005F33001B0E,$4600683700834600,$0086450087440083,$723E007F45007C42,$00004223006A3A00,$00140B0081450000,$552E00814400733E,$43008144002E1900,$00723C007941007E,$7B43004023004C29,$0D00804400844400,$00000000773F0018,$8447007A4000522C,$2800824300894800,$008949004525004A,$5E33008443007D41,$4300733D005D3100,$008743008D4C00BF,$CB9A00884700BF98,$9900DB9900C69B00,$00E09D00C19800C0,$D49E00D8A100DD9A,$4800894600CC9B02,$98E6E0008C4C008A,$C79B00C59800C59A,$9F00C17F00BF8000,$01D39C008B4A00DD,$D49900DB9700D897,$9800D89900D09801,$00C29B00C89900CF,$88439DE8DF00CA9B,$74009C5D1AC5A700,$00894900D7A000B1,$E3A109DFA600D2A0,$4500CF9901CF9C00,$23D2AD07C9A00087,$D19961E7C811D4A4,$7B00CE9A78DAC200,$97F5DB0FCDA21EAE,$B89000D3988DEAD6,$B043D4B800CB9944,$98EADD8CE7D831CE,$8342008E4D8DE2D5,$7E8EE6D8008C4A00,$3AB18700C39900A6,$CFB839CDB357D6C1,$8F2CD8B800B7816D,$048F5000D19F08C9,$D19C00D99F00D095,$A800BB8004AE7000,$35E9B40CD5A213D9,$D09B03E5A400D69B,$A611ECAE22D39A00,$20B67E18E9AE14E3,$B08136BC8D08B97A,$A619DEA653E9BF00,$00E8A686F4D80ADB,$C9865CEAC209B278,$860CAF7301DA9D00,$68DAB40CCFA23AB8,$D59715DAA362DDC7,$A64DDBBF66E5C600,$73EDD01BAE8014DE,$D6AC7CF1D465DBB9,$A417C99B26C5A21C,$11955933E0B03FCB,$D8B33ED4B600D29A,$9800C7980A9F6238,$2CCEB175E4CD00CC,$D3B71295598AE3CE,$A104C79D8CEDD638,$43E6B608C39F10D7,$C39E78DFC11ECCA9,$A48DF2D344BE9006,$06995C90E8D914D6,$BC9229E0B050E4C0,$D33DE2B923D5AA2D,$30BC9357D9B981E7,$E1C03ED8B669EACB,$7F5AD8C00E9D6256,$2FB3876ED9C200AC,$B9981C9F6960D9C6,$3B5AD4C67CDFDA00,$6CD9C700AA870082,$590C97E7DB83DFD6,$52744B0000008695,$060C310E1400534E,$1BAE431101150403,$262E2320F80802C2,$413958B31F6A2C61,$98E5340F4BB38438,$4BB33F6B42B5C4C0,$AE52DDE8525FE9AF,$48AE48A1E9C71857,$C03B15B0E7AFBE77,$2ECECD214728E19F,$4144496302000062,$281E206063CB3854,$0816FAFAF814AAA9,$99F1E693627228F2,$11F54C660416233A,$F7D1DBE62FC250C4,$D3E9C2C2C2F4DA7F,$934765744C75F526,$12121B95DBD8D89F,$A7ABB73838382532,$5B4A7C8A3B23BAF1,$80BCBCBC9CA5CB5B,$D72B96F8C0848484,$DEFB381421B03ACE,$444162B55D9D99BF,$97CBA6CA9CD94949,$83BB81368B1E0E9B,$658CF6EDEB61E9DD,$671514C51715E7F3,$2F5FA8886B9EA496,$6EE8F3EE60530028,$84948FA268587A7A,$565072624F948496,$B046A135738DA6DA,$4D0A0F4F4D6EED5B,$9666149616669232,$BA5F4F4B0D0A4FD6,$EF654580A2158756,$42863E199DACB4F6,$31B2424CACECAC4C,$320A57AB4161A169,$6073396EF9701441,$3320AC42A65DE1D9,$A8A9ADD6F5255939,$C380A21194AABE58,$CD17E78CF6FEF8F7,$03F8A4193276A098,$99C7D1C15C3AA941,$6064AD40BA9EAF0D,$16716D0206E195E5,$3ECFD9D975778298,$038B80538642C27A,$FF5D51C981A05804,$8E2B1BB343F3B3B2,$E727217D3CB0E668,$FB581B900F149BFD,$1F34D97014D1D815,$0BDDC2FD79AF8C0A,$54361E1FE26B82A8,$094DEFE73E722C05,$9959555A36F27EE9,$BCEC153464E7E0A3,$9EEBF6083C6E47F6,$FFDFDF18F7EBE5F4,$793A8B9260ABA17E,$BD49A7CEEFCFD735,$8CFB7C7F7FF9F9F9,$F6B6A7DE579D82AA,$704101F8103C5C56,$9511652EA80DBEF0,$6767404F627539F7,$8ACCD410205C6067,$5176A22C71494166,$8CAD48892F16EADB,$8D53339C88080C8C,$F9F35B08B24D350B,$24BC39BE5E5D9C2C,$AA0B089F1164B522,$8C35759978053957,$913939213D545181,$99D818B43D11998F,$FD6DB9B96465C578,$3904B0D9E50126B7,$E07653448E280B3B,$795E05BF4CC58790,$0CF27C0E11112E06,$0000A40CEC4C4CAC,$39F04D33DBC5D68F,$444E454900000000:Data.b $AE,$42,$60,$82
-  I_Refresh:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$58457419000000C6,$72617774666F5374,$2065626F64410065,$6165526567616D49,$00003C65C9717964,$704745544C500003,$000000000000004C,$0000000000000000,$0000000000000000,$0000773E00000000,$0000000085430000,$0000000000000000,$00007C4200000000,$0088480000000000,$502B000000008A4A,$0000864700000000,$000000007C430000,$0000008346000000,$00000000008A4700,$0000000078400000,$7F44008849000000,$4300884900894900,$008143008845007E,$2F19008544007740,$4600844200452600,$0058300087460081,$0000006F3B003D21,$4200733C00844700,$002C1800552E0080,$7941008B49008949,$00000F0800894800,$006A3A007F450000,$7E43004F2B008145,$9900874300884700,$00C39900CE9B00C8,$DBA200C19900C89B,$44008E4D00CB9B00,$00CB9A008A470089,$8A4901C4A300D9A2,$9C00D8A052E8D500,$008B4A008A4800D1,$874600C39800C49A,$9D008C4A00874200,$00D9A100D09F00CD,$DB9752E3D500C79A,$9C7EE1D300C29900,$00E68000B78100C5,$E6E100B8802CD9B8,$99008E4E00D4A098,$07CBA100CC9B00C0,$834200BF8200C686,$8100E3A600B28100,$7CDED400C19C00BA,$C4A300BE9800C09D,$9700B79951E3D500,$00CD9A62DFC700D8,$87474FEABD00D198,$C600AE7F00C09700,$00823B94E6D760DC,$E3DA00A97F82E3D6,$875ADAC400AB7F7B,$00D3A200AA7000AB,$D5A300C18B00CF9B,$9300CA9E00C99C00,$00CDA100C29300C0,$C6A000C8A000AC75,$CC4EE3D57CE4D100,$00BE9300C09A72E1,$BC98008846169E66,$AD28C8AC9BE7E000,$06C59E1EC5A827CB,$E1D34CC09F75E0CD,$C71BC4A76CD8C185,$2DB18A4BC19D75D8,$E2D349D5B926B182,$B33AB18700C4A181,$00BE9B29E0B139CC,$CFB80EBFA258D6C1,$AF8FE4DE0C8E4F6D,$0A9D6124D8AD27DB,$B99A00A97558D3C1,$7A18D5A68DE4D800,$43D4B832D8AA11B3,$E2D500C6998CE7D8,$5964EEC544B8908D,$2FBE8996FBDF1195,$E6BF0CDD9F8AE3CE,$5900CC9813D7A368,$1ADEA53AE1B61295,$BB9C75E4CD38C996,$C665DBB904D49D00,$2EC69162E8C666E5,$E29E78DAC110CCA2,$A636BC8D00E3A000,$00C19853E9BF19DE,$E5A400DC99048F50,$B451E8D47EDFD603,$11ECAE00BEA135E9,$D39A20B67E14E3A6,$9D00C39B4DE6D122,$00A17083E3DD00B9,$801C4DE1D200AF8C,$5274490000005A96,$04010D063100534E,$2EAE11C143031614,$F8260FC023150E07,$48C73EB3187B33B4,$17C33B42F81F4B1C,$9EF63437FAD1EC37,$71AC3FE26C159621,$595FE9AFAF38B36B,$42C42B41E752F9C0,$007F1CC2D9BC5AB3,$38544144496D0200,$62414C04C06063CB,$1E64D27700F80CAC,$63F42783D80A7C0E,$4C4AF1D1379160A8,$1349BEDEC48102F4,$3AED062BC8B05551,$7A7A635172B05050,$642EEECE9EFFE37A,$DC9C2F174976AC15,$681070869AD37BB7,$BB8294A96DF4CCC8,$6B6773F3F6F1D594,$DBD320217D8B3B3A,$CF2A19862F34AFCF,$CFE767FDDAF97961,$83040D0D0B4B4F9F,$A86E211C9492D0D0,$BADEB71E8F110EFD,$61513DE1C8EA73E5,$C5CF985D1D151020,$8793D5F44F81350B,$F47D399CEF376D6D,$8D48A848204F72E0,$C581B8836462E6AA,$DB77CDCDD79BDDF5,$808272199B99269F,$0BEA1E50395567AC,$5FAE32339FEFB726,$C9272828CB6D67BA,$06790865B122040E,$DFB467DEDF1FD17E,$0160E267E0527588,$2D819E420C916487,$B55CAE2F9787EBE2,$AF2F05C581626052,$3A3A225CD8942200,$29B111F86C221212,$20D2CECC9B148CCC,$71BD84A131C85987,$DE3008705797B06C,$63E6E30E40059959,$D6D50F5BBA124941,$8B80504D0F03FC7E,$AC7CD908310C2105,$10B836453FF7E9A9,$7A05986E24E4CF07,$CBE0F13FEC37EB46,$6084FF7C84360F5F,$96CC7EB696ACB076,$720BABADEC56AB1D,$0BD7D49C4FCB87E7,$B75C6DB6CB112F49,$82F6E3CECD497EBA,$9F9EFAEEAEF9304C,$E2E16B2B2081229F,$1A582F657F336BED,$6554AB3A7106CA62,$88087F5BE6666F8B,$3B3F9ECECB8DF78F,$7931161A0F844848,$640050DE7E7E7EA5,$233A904E77359CCE,$25293942DCEFD437,$24B02D30103EA1A1,$2A9A86A79E792539,$A30BF2B97999C02C,$E98CEA60200353A3,$891125C425348253,$22B52A3AAB918D92,$94245544620213C1,$A2A803842291B845,$A49402139653CABC,$A2A41EC3500505C5,$51F8D80A1D84562C,$65F1D88A642A21A5,$79BC6E5E5E010E48,$00308B099859959A,$DCC99669B1CB528A,$444E454900000000:Data.b $AE,$42,$60,$82
-  I_Language: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1800000018000000,$CDA9D70000000308,$59487009000000CA,$0E0000C40E000073,$00001B0E2B9501C4,$704745544C500003,$5E234DFE302F4A4C,$2C36477575753A3E,$00004C41501B3DFE,$A71235FE3D416500,$1B0B0300022B0000,$070B183AFE1F1E1C,$3F4F1F0050230000,$3F3D3D0000000025,$4336133EFE4669FE,$096C607402DDFE46,$3A4BDC2249FE0A0A,$EEF500068E4C4D9C,$9E8D4D288C5029EA,$DAC1A83839E9D5BB,$1E18131335A1704F,$0B292A303D416226,$4A4B6E0000000E0B,$7B703B393A024879,$00034A7F2728A385,$8598F84F1D005022,$283E404466755F4B,$2508BBFB51515124,$080C740F28FE623D,$3F340FC1FE0A0A0A,$A14F519E01243E42,$E7AF7FD47E1E5458,$00A5EAC19517BEFE,$73BBB8D6024B7F00,$D16505CFCBE5EBB5,$3D25BBBDE3DCA46C,$D01DC4FEE29D4E64,$2922238296FE03B8,$3B5F506EFE6C6A60,$FE081CFE2928A304,$8088FD585AE6244E,$967EDDBEA2D0B7A4,$6E0BB2C601055DB6,$8068590F33FE8B81,$91F7ABBCF8BB937A,$C7BB977008B5C07F,$8C5333C5C0D7C9C1,$F1F1252522A97C57,$E28384DCC3977EF4,$B78E647D3003969E,$EAF76A7CF7F1D3AE,$236D6A838484D2E9,$2B2825A8662BCF78,$92EAC7B4A9F4EBD8,$37A1570E8C9FFE89,$C1A58C3341ED0000,$32CB585758403258,$FF474338403E3E1E,$8397F97676761C3E,$5CFB1135FF234EFF,$F7455DFC56555644,$435CFE233EA0C1CD,$49FF1834FFCCA78D,$FF6E6D6D2F4FFE1B,$3D52FCFFFFF5162D,$99530DDEFF4356FB,$00DCDAEBC3D0FFDB,$05E1FF6B7DFFE172,$E8FFC1C7F40E23FF,$93E2B78B617BFF07,$2C2EEAA1AFFD2A41,$90FD1B43BC1C43FF,$D86081FF5C372077,$96A9FE8397FED3CD,$A0FFB6BEFDE7D5C5,$93A4A2A45869FE94,$1638FF203CFE9493,$52FF6980F94665FC,$847373734B73FF21,$294EEA5B584D918F,$7B3FC2CDFFF0B77F,$E42E53FFDFE6F9CB,$EC932CE0E6F7B5B7,$79036D7BDE819CFB,$D12345BF3B5FFFE2,$3644D94A53C03446,$2ECAE1CCAD335AFF,$0FE68313273E941A,$606CFF213B9BD472,$57A3EDCAA28B4E29,$C07D90FF6DA1C541,$253E969FB5FB08AF,$766C9192DFA37354,$F7C7AB907783F681,$BEB4ADD5D7FABFC4,$875EA1623987410A,$C5E0C7AD7586FEBA,$A2B5F9A17F611742,$CABEF5E6CEA2A7F8,$45D28E59BBC2EFD5,$626BECD08746B079,$06349B683F944D1F,$527486000000B0C1,$09FE3FFE0A00534E,$5050D0FE3F2C04FE,$FE2050D0D028FEC4,$FEFE5001FEFEFEFE,$FEFEFEFEFEFEC4C7,$971A1BA5214F50FE,$FEC4C4A0D0C4FE8B,$C4FEC4F7EC3C36D0,$FEFED0D04CFEFE4E,$FEFEFEFEA1C4FEFE,$10FEFEFEFED0FEFE,$FEFEFEFECBA2FEFE,$E8FED0FEC4FEFEFE,$FEFEFEFEFEFEFEFE,$FEFEFEFEFEFE40FE,$50FEFE42F8FEFEFE,$FEFE50FEFEFEFEFE,$C80100008028ADE8,$6063CF2854414449,$0044E010664D0100,$0B0F56BB38B04673,$B4B2304882100F4B,$8ED89AEDF2B04B00,$609607643ACE2604,$A20089DA2FADDBE4,$483B0E2543496713,$84A83091C4802174,$15F2E0C81D1BF9ED,$6EB67E4AFC84881E,$0B299A2061036420,$D18407DD14C4D893,$21240D74C4C7DC20,$EAE6E7707C489405,$FD79F2994CA74FD5,$C3CABC5D4F474BFA,$5EF15736F2A95550,$951495CFB5DACC42,$1F9C960C3CA914BE,$2723B15F51A0CC24,$D46F9DDDEC5C59EB,$2491782F6CD794F2,$754D5781984DDF39,$A2CBB9B4BBF6797B,$BCACDC7F1694975E,$FFC4A07B0AC57331,$DE7D7CDA6E7ED37F,$EDB0DD6D5FCB65EC,$72B52E978F8D87FD,$F26EAD369D68D064,$48572CDB66F339E4,$69E11A9AA854F857,$A4E777FEA0C027A4,$FA7D33DA4D261309,$110148A3EA63105C,$7E9916E686561D11,$BDB66EFE2E7EAE2E,$C82407B84A46405C,$9AF6F6F4B71A1BD5,$84B7A40FDFE6ECCE,$F3FEFEF0488391AC,$F775F67327D7FBEB,$0B13AACCEE793E4F,$6EB6DBD54D12A1AC,$02F8FC4EB62EEFB8,$12A18C5CFC8B95FF,$8ABB6FE2323B6535,$C4B5E81BEE3F10CD,$DBE3FB512204DBC7,$60783B1F16B755CB,$B25E9ECE17C5C2C6,$2C9DC72F912200C8,$2CEDCDC866642824,$910BADC4E0182824,$60ECDA0340E01508,$000716000C762909,$C778F4FDC0C886F9,$444E454900000000:Data.b $AE,$42,$60,$82
+  I_Rotate:   : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$4144494F050000F4,$5C806397C5DA7854,$45EDB620EF851449,$CEDB6DB6C6193B6C,$4F631B6DB62B6620,$BF56EB677FADB623,$BE3F97BBA0F6CF74,$E47DD6E94E757AC7,$8885638AFFF9BA33,$DA3F2F3352E6BC5C,$8D09FC3CDF4FE5E7,$F53D1FA7BDF0ACFD,$49C594C18D6D23F6,$F347E9FC7D85F603,$7C2A71B5C3BF0425,$E5CFC2DB533C1E04,$9292351D46C72E7B,$3174D4BA00937BB8,$025A3EC44F29F961,$4709D71CB8A5B3FD,$F816FCF5E7616B43,$971CB8AB9E9B9F9E,$1B4E11B9E6C33D97,$4D65DE7A00DF7160,$62F9FE864E365C76,$73410AEE80F18A9C,$F856CBEA09570129,$88AE2D6AF3BB973D,$4443EA2CC7BCD8EF,$C1D3E785901B0EAE,$422071EC21B26B2E,$5F502CD096C04C9F,$C1B4569BBA056827,$CD19B6FAE2417584,$63096AF71F2C892D,$DA85346F31A244D7,$C6E0069B4E1206FA,$2421D41286D081D3,$1F5841182130BACF,$66F14D84914D82E5,$DC3A8CE7CAB8C436,$327F7CB8C5DBDC4A,$8E5CA5364A12163C,$EAB9C96E13CB4818,$842358AC8FBCF5B8,$5A98B368F2A251B4,$B423A1E84C3F8C88,$C46BF7CCEBCE2159,$89A08E3261064DF3,$5E7CEE2B2E35B331,$8E9739E13C17E58B,$7B5F5B806B26D0F0,$5F1715CCB56E3528,$8BD2A1B97B8EC3B6,$ACC23DE56893188A,$B474519D7967248B,$E30D31A25A1A3D58,$81FEBF7E73F3DF33,$F1399932A0977C30,$4AEFC8969FD103CC,$2ECD481929BCA434,$59AB2F638A289E67,$099759D2B8CAE02A,$99D4329E65E8739E,$E7288A084A092A88,$69B04D9BDF9CFC4A,$AA9E161537E309AB,$39217B99B4D9CF0D,$B1C5D1B5FBB99903,$B96E7114684E71E3,$A96E098BE68AEF4A,$65730D999A22A1A9,$6D4F2BE48BEF99CA,$C9306C3718EAA5B9,$1C7755E578BD93DE,$2632888AC1960E33,$26F0387A58A72067,$24C7E6C3753DB61B,$8B4E9EA62F32F039,$76DA9E22A0E9637A,$1B9708BCF2BDF36D,$AA0F9CA10F233077,$B2FFA05507A1C258,$01AC9ECA22464E50,$59FB784D8D7459AF,$D40EF9529722BD11,$25F7E4D4529A5B8B,$D108321BBEC7519B,$8F9885CC68C9D652,$8C819C95C81A7FD3,$4B50D87B374A9282,$AEA77427695B8050,$EA8FD381B25A85D8,$4E5C5B66AB920AF2,$62BB80D7671DBC44,$17B5A41764125722,$0D87C8DD8A8EB956,$C6B60F12DAD27A5C,$F81BC921ABF04164,$CE368334681EE0A7,$2684761E97045A3E,$E15C704B627B2498,$034D85B8067BFD21,$9540E76CC59E6BCD,$9C2743514652549E,$9AFAA3E684B7D7D0,$2FE9B24380DC16D8,$F80E80B1EE58E01B,$284B640D929391ED,$0F4F98F3151C6F5E,$B073E7E8872B9E57,$A2E3BD95A86A56E1,$93868C281FA605A9,$E67C4A702AEDBF69,$48067834FEE1820E,$73C65551E7BC7903,$11573AAF96E5AD01,$DC92AC2871CB1786,$2718521DDCB7791D,$5510A59848CBEA62,$E988DF894E038DB7,$CCAE675173FBB88A,$FC20B1B21A706484,$2F9948C315C0568E,$D5E37AEDE68BF148,$140FB3135D193834,$6D9257917469A340,$6E213ED67C487424,$D593FC4269D50DE8,$352FBB85BD62FFB8,$B8B20B2BBE92F852,$E5B16561C3837384,$75442D6496326FFA,$D1F8F91195384E38,$E5F6EF37088739D1,$B467FEB989C57116,$33B02551FDFF1E02,$D671B1073D7704B4,$29EB8F23206E3BD6,$9327234A0E6C597D,$0AD1599978621615,$2282B8BEC46784B6,$05A4F72BC523C941,$3B309CD9D69586CA,$5D0F9324939CDB8F,$CC2EB335F0901488,$D9B070379C27264D,$D247C9807321C865,$A38934B6D97A4381,$1FC0359C5CE012AB,$2B3ECCAE893FAF95,$335F18B094991193,$C93A7EE3B1E94C3B,$6CBB80FA3169DBB2,$2D2AF92F29937F35,$739A13684E54E8CF,$71082E7385732A0A,$FD51BACF3C693125,$433C74B1FD4C8384,$081C050BE4A66A4E,$AFB313424157F6DF,$16C9120B30BC7610,$4C7B8B5606CA307A,$60371CE13B6CCE11,$32584896DBC2C4C7,$0D27617DA32B0D89,$6F39374698F09AD8,$131930DFF57FD164,$0353FED90AF2D2DC,$0373FF09CC833936,$3981B81F007F06FF,$000000009F6A5BEC,$826042AE444E4549
+  I_ARotate:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$41444945050000F4,$A4786396C5DA7854,$DB6DB6304F851449,$6DB6DB6DB63274F6,$046DB6306EF5E384,$A2A75BBBFD6DB18D,$E3F564ED9D27BE7E,$BDD56EAAB7DD287C,$1BA72AFFD9AA3868,$E5E00B9E34841956,$85A6208B4C4F10B1,$B1EEF845C37FE231,$970029A2E60D0100,$E5B3703986800C7F,$E1B5FF65D5C18590,$F5D72C5197A9FF72,$00571C416718476C,$DAAE19CDE859A6AE,$D9ED8B970FA121EF,$A95D7651D6113946,$B3FE2D1EC99D3F26,$4DF6E9DB0574FCDC,$EE0071C62F1A4196,$D69390738D18034E,$4988619AA5E77249,$FBC8C44EBC424F7C,$CCED9EB118F1D294,$97A7D79D7EE996CF,$C6C7082E2CF18B46,$76DAD72E5EC24297,$2BCE46539D788D25,$CFBD4973E4631723,$FEDD033B02ACE9D9,$0512D1F572F1E3CA,$37002043CE1A4E91,$FB2E2641368A00A7,$F132CDEC24937B89,$10EBDF256F2D06BA,$25B2AE214D901BBF,$F99559B21375A21C,$65EDAAAB9F11735D,$603900C9F67DFD2D,$464DEA40968D2FEB,$D3777B38C27CD89B,$2FB621EA3AAD041C,$A5BAF15A786B651B,$6432986F88B8878C,$DD2182E31057AC81,$F7FEB7E996CD20FD,$1440A5BBF204E552,$65BD67F9E8247794,$8D240131DACAE1F9,$DF17A5645D40A013,$46C9353EF65CB8FA,$43EFFC40EE7CB41B,$EC48C6BEB0831D66,$50C7D40A430B57CA,$6D566FD672CFF9BE,$C7E957D5664A6DBD,$6AD2B68BD8E4D9BB,$55C6FA821F54BBA5,$82EB61663DECFD80,$8C1CE368FB39D5FD,$F3C6CC78809E67C6,$02A5394009D0252C,$FD55CB3FE6F8794A,$B18D47427B63B60B,$78AF37B1992545FB,$A4011D89002EC6CE,$BE4E483ADBB325E4,$8BAB7F0B39E9A6EC,$8FBD695B30CE02DE,$CDF3422073529579,$0B6E3D4527BB967F,$CA3E3F02704146FB,$6A436D47F2B73E28,$0BCFE67CE8E90047,$EE0A18D9057EE824,$A53036328CC25ABB,$E341A11A00831CD4,$B1ED4F3CB23FF232,$C8BC04A920729C08,$3713C76B411F5B2A,$C80082F78E9D7809,$6987C87F7B4008E8,$4C14F9CA299ADDB2,$866B14B939B3E931,$E97D6376EB8FA48E,$2F6B67308EA9E8F6,$C025FF4E2673DC6D,$ED465847656337F5,$37496B0F03E4F4D5,$FB8C3513C852C4EF,$5355287295EB1467,$3AB724A947541932,$908ECB072F4B804E,$D256E3F8FFE7D174,$0E868EEB94B53FC7,$7276E52456E3132E,$C010E37E929458BC,$80B435FDB9F42173,$641D07F1D6825F78,$1D9B1D37A96E406A,$8798F00065C240AD,$AAE65D91D52E3B17,$01CB6B9AF6B576BC,$A281E856BEE1474B,$3BC02BE6E26038B1,$D5D20077F767177F,$79AD98F6CE008899,$F5B91242E5BEBDF4,$F34C4A5C39ACB66C,$6087B3E458D6A0F0,$B61842BF85AD063F,$073A994805094DB9,$BF2DA90DEFBCF2AA,$D05EA31DA3ADCE5C,$1ED64ABE796272D5,$DE2A262675EFAB2E,$EF58822CEFB4A457,$78C213C63F19934D,$59D1C14EEB83D213,$E9B2AAADDF643901,$08698EBD661D6254,$5DC2C8465A4FEF1D,$D0163A9CE6F06465,$2B9BDD8481CC6B71,$73C6021BC4BA4367,$4CEDB218B06855CC,$009E31925ABE0961,$2EE6E395254F9B5A,$D1FEE7BDC239841A,$6720075E2619673A,$1843CEEFE664BD2D,$DC7989E8542AF401,$E73FF2D0166E3F8A,$ECC7518414673E2E,$6647D3BB9C989315,$A52484F9D31D1907,$E4590BDF0828E152,$9D4A5AEDB29CB0F7,$BE304A8E89DB7880,$FDA92E6FDDC745ED,$A20A35C017C5E385,$99DA4C76E44C1B64,$B6C8325B3F4E5F4C,$0933EE33CE3A94D0,$66FC51C22D0CBDF1,$9D34FEA41F7B3282,$40A211800F8BA613,$724E227B5468ACAA,$490BCACBB8054635,$5C96CB44C97BC7E5,$EFC50D1222759AB6,$F3B4A003EC208759,$9F78C1CD5AF8E02B,$A63D831ED69A2322,$D67B78641F63B819,$6D1252628444CB9F,$D8E2B2424F031CBC,$1A0649482475331C,$3F2088D320BB7DC6,$29FCEE3462D2673E,$30A6812C65241670,$08DC65E21705E9AF,$1534C0B182117090,$7474802BFFC68CE7,$004BFFC651308A36,$A3FF868F0952139D,$DF851B81E52D04FE,$4549000000002B1A:Data.b $4E,$44,$AE,$42,$60,$82
+  I_Refresh:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$4144492A050000F4,$AC700396BDDA7854,$DB6DB6D9FB841459,$15B67CDB6DB6B38C,$55636DB626B6D9F3,$C3D49B9A9EF7A35C,$B7C65F5532FF333F,$FEB79BDB86E9D5CF,$73D07ADB7A68006B,$FF37E66C68024E35,$0E2B82D73C1D0176,$FFA3401870CB4E80,$F2BCC0ABCEAE80BB,$1A3845733EC5F84F,$02BAE2DC12EB81B0,$E015A707E2565D07,$C5ACFEF201938D42,$CC3DE44662F95660,$D5B7615D84AC4C2F,$3C99B1C574F649F8,$9604BCAB4B1AFC9B,$5DC576FCB332FB54,$B7A569D791EBBB8A,$A3055C772B6ABB31,$6117ED8717E49E0A,$5ECAAE1563D8DE24,$CC75B2CCCCEB3C6E,$913C83D64B4758A9,$646F717A227B8330,$D000C0D14046865F,$CD3F17460E134C3B,$746138E5B741C745,$87EA855F77126F30,$54E643EF25A475B6,$2059FA270CD9E5AF,$8441DB842DE81233,$9E337C704D5F4063,$368020D5F74D1DCD,$791C52D12C800B36,$6266AF9526075B68,$28EF4F68490C7BC5,$6BE2B789AD13E3D4,$E0298180279F35C8,$6E55714FC2E033A2,$C23E0BE7B2016189,$31CFF973C1AB1EDD,$095E8224FA79F2AA,$79DD99DDC0937C56,$B1E30FE48F306728,$6F724301CA0C1192,$019412B54BF7DE46,$002C01FB9C16797E,$57DCCD00015CDAC6,$E6AA32A71775A7E2,$042A57A63467FA69,$DC99D2E9E2776686,$A7C0E89F1F91339F,$BAE9ADF58EF25BFC,$4B09B95701BB7412,$E2F5F3A2C85D60C0,$7ECC80CF0D9D1413,$BCC686E77858CBE6,$8EE0F517770F7B52,$BE9793D455DC081C,$E50E52C6A29B83BA,$32BC1CC0627037AC,$5DC0327002AF05D4,$A372BE2E0E5DD90A,$8B2EA6BF902DF1B8,$76B279FDD3F3E270,$6B61606043E4770A,$E74EC7B72CF77E46,$D21E347DDB512FC2,$74577456F4520D83,$51E5C06B9EA181BD,$EFCB2B6BF905C4E6,$05DE99DE55503E93,$A45EAA57E66402D6,$27E800161DBCD80C,$A3395940658295DF,$4453E9D07AFB784E,$77C3925F2017119B,$4188D959DC0E9BF8,$76EBFC58194060E5,$11C1DFB38E3CBAAE,$6281791D4454DE2D,$2E0171B8818BA6AC,$C5615B708A42205F,$C84F0FBD8DEF2355,$8DA29DA2A1BACDCC,$6B98A51E5FD43769,$F06A6EFDEBA6A870,$0B64F308B23EC763,$ADBB9E42FCEAA0C5,$BA2293FF4365BD46,$2EED45720EAA1C18,$D580845A70D59DBD,$8A330362A8B0C6C7,$CB0B39FC5590A53E,$963583B34677D497,$718F46AECC98C58A,$968F79CE8D3322E8,$CFFC14067DE907F4,$FDB27462808F6B81,$90C8499B891BC466,$7FE7E968E2AB205E,$EAF02CA2970B0180,$6D2B90C65D2F4CAD,$97C1802EFD84A3E9,$5171CFA7418337C1,$864242E12E25300A,$4AC7A8918D6C9FEC,$ED865E764E83534C,$B65E985B96FEBCB2,$E822EBD386630788,$1C95915AAFFD84AB,$FC58EDC3961E0775,$61B090C8485C2400,$2BA03E798DC88C33,$4CABCE4B4A1B1F17,$4BD187E2878F792C,$08E0D4715128FB09,$ACFC1AC7A07DBDF0,$A1AD87E2FB535A1B,$1B755A9190910642,$5AFBB9A908546A33,$53E2B5214E7F32D4,$0C1E9973CDBE9426,$2570DF66B14A6C88,$5B2E5B814506091E,$526E96F107F8C06F,$110907849C0F0C0D,$A8B2F05E3CEA2612,$F8DF915B85783B47,$7AE2518F16B08844,$2B65DB950F2DB5E9,$612110943D91B511,$BDF00EDE1D454242,$4E0C0E203058BF06,$BE4E75715661E254,$0156DECC83BA2DD1,$7C261211094AA41D,$564876491809AE13,$3EB5BF289FE210E8,$205FCED56AD077BE,$B45B6BB74534C015,$98499B8AC6280AE1,$7425823017515090,$D704CD0C1D21DBE4,$C2AF59EBF737C058,$69260027C4EEA32F,$3203EA9430EC6D07,$E223941150908A41,$91B6466423C43612,$B5C221FF9D7713ED,$C1FC8C1DE7BD2CF0,$12170908B6B82DE6,$0EC9C28742404432,$8BAD57D24CAFB50B,$2121154CFF2E76BD,$E403ABA6CF458C43,$BF6015ED840D6D77,$E13AEA3612190908,$5638CBD02F2985BF,$B2C6B8402D7FE1D3,$C109FCB3437599DB,$008046348C3E7B92,$AE444E4549000000:Data.b $42,$60,$82
+  I_Language: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$5948700900000061,$0B0000130B000073,$0000189C9A000113,$DA78544144491D02,$8410019CAC038A84,$456DB6DB6D5DF3BF,$B67DBB585586EDB5,$ED8DB6DB6DB6DB55,$99D93B324DF3E5BF,$D2E974A860AAF88F,$29CAD6E52A954B13,$974B65CCC3197C4F,$3CA72B5BA0606049,$D3698F4954A255F1,$A361A58D86834867,$133794E5775A2926,$67EBD9A47C3E434F,$7758A9099EFAFC4C,$643C4E75A04F94E5,$A49A4405C6913744,$3C2EB5957447DD62,$0F47F1329D4E5BCC,$1C4739FAF138987E,$61C279A3D2BB0E4E,$0B1A72E269DD7D47,$DF4C119AC80E5D37,$26EF8FB6AC05FAF9,$85FC8DC278BA5EBC,$7DD180370EFFB459,$CAA5EF807C3B61B3,$F5CE89823BE571E0,$BE7E0E75CEEC500A,$5699FAC113DAE144,$CEFB1E41B140CDC5,$F65B13930B8915DF,$9B6DB2F978E6AD89,$BBAF6BFA9A0CE148,$24EF767A4F7F3DEC,$B5F07CBB386AD8F2,$84705A0858B19879,$AE45C5F1536BB9C5,$D2E7480987E7B505,$A630EE0DDD7B5FD4,$FBC37C3C0C78662F,$EC87A05844E6BC6F,$864F936FB75F23DF,$235221E3E6FE1B3F,$EDCAEEBDAFEA68B7,$816501CA048C0FF1,$A452D7E90F005C2C,$4E76BB7E99C3466A,$2BBA75FF35F98691,$9B3114DE64F13CA7,$4F857B10386243ED,$F36997F0D9F1CEEB,$4395DD7B5FD4D101,$E8403FF48F32F8F9,$6BBEC3BDB094B7C1,$1E813761BEFBC103,$E3E5395DD7B5FD4D,$5C6D610AB833ECCB,$A31DA9AC636FF6B8,$A9A2C69013077DF6,$EAB0F7872BBAF6BF,$C28FED15CADC5024,$77D529B311FE49EC,$31E3EDDECCFBC536,$6CDFB83FDECC3F7B,$D2DCAED7FED5F64A,$E7E0364893DAA3D1,$C3019AC8ACC049B8,$0081AECEE332825D,$AE444E4549000000:Data.b $42,$60,$82
   ;The following icons are used form the icon set "Free Game Icons": http://www.aha-soft.com/
-  I_Dice:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$1800000018000000,$CDA9D70000000308,$59487009000000CA,$0E0000C40E000073,$00001B0E2B9501C4,$704745544C500003,$C43333E82525E54C,$1D1DE16464D62222,$00B0CBCBCB4444E1,$E64848CE4F4FD400,$6161CE2B2BE62929,$28D18383F56C6CFC,$FE8787FC5A5ACE28,$5D5DCEAEAEF87878,$4FEF4747C29898FE,$FB1313E01414B54F,$5454BFBDBDCBB4B4,$7FF62121DB0000A3,$C50C0CA80000A67F,$5555C62323B8A4A4,$54EC6363EDB6B6CB,$F77979F87070F054,$1717B78E8EF48282,$E5FD8484F35757EC,$F49393F6B7B7F8E5,$7676F67373F46262,$D1FB2D2DBBA1A1F6,$EEACACF8C3C3FAD1,$1F1FB95454EB4646,$00DA4D4DC26C6CD0,$F90202D51C1CB800,$0F0FD96B6BC37979,$8DC64C4CBE8A8AF3,$C37777FA3636BF8D,$8383EE6767EB4949,$18C86363C72222E0,$E11616C69A9ACC18,$7777FC4A4AE21616,$00D59191FD3636D6,$FD8E8EFC9595FD00,$8C8CFEA5A5FBA0A0,$81FC3434DA1212CA,$FB8282FB1A1ADB81,$7171E0D2D2F98686,$1CB44242E89898FA,$AE9F9FF89292FA1C,$4F4FBE0B0BAA1212,$1DDEA8A8FA3131B5,$BE6D6DC54848E71D,$3939B5EDEDFC4646,$4DE14949EC5050B5,$AA2020C97575F44D,$1616DF6B6BF11D1D,$27BA8B8BF44242C5,$C97B7BC65757BC27,$6969F10707B4B1B1,$5AE81616C02D2DC1,$ED8585F44B4BD35A,$3131E14F4FDB6767,$7EEF7878F14848ED,$ED5C5CED5454E57E,$8F8FF26060E75D5D,$00C94747E3B5B5F6,$D0CCCCCC0000B700,$0000BD0000BA0000,$2FE7FFFFFF0000AB,$F26A6AF70404DC2F,$6363EFC7C7CB5C5C,$39EB0000C10101AE,$B40000D82020E439,$0707BD0000D30101,$0FE03F3FED6565F6,$CC8686F20000CE0F,$C9C9CB0000C70101,$00B21B59F75656F1,$E5CACAFA4343BA00,$5959F49D9DF72222,$DDFC3636EA1B1BE3,$CE7474FB7171F5DD,$6161F58888FA1B1B,$7DFF8C8CF73131C8,$FC0606D25959F17D,$5252EE7373F8DBDB,$00C43737E63D3DEA,$CB9393F70303C000,$CECEFD1B1BD30808,$17BC8E8EC17B7BF1,$F04D4DEEFAFAFE17,$A5A5F73131E96F6F,$8CD07171FB9797C6,$C54141C43B3BC38C,$3535B9B1B1CE2828,$3CD71D1DC11010C0,$CF6666E72A2AE23C,$2D2DDD5151CD9191,$2DE20A0ADA2A2ACC,$F66565CB3535E42D,$7A7AF99999F1A9A9,$F9FEBDBDF98080F6,$C12F2FAD7C7CF5F9,$2D2DBF5959C46D6D,$091ED8D8FBEAEAFD,$5274AE000000FD28,$FE01FEFEFE00534E,$8CFEFE0D02FEFE06,$FEFDFEFEFDFEFEFD,$53FEFEFEFEFE396C,$FEB5FEF3FE0EFEFE,$E831176172A17FFE,$FE9EEB39F1FEFEFE,$14ABFEBAFEFE9DFE,$FEFEABFEFEFECE49,$FEFEFEE546FEF9FE,$FCFEFEFEFEFEFEFE,$CD212CFE0BFE44FE,$6DFEE0FEFE3CFEFE,$4DF3D748AC8C84FE,$78FE2E42FEF5F829,$F3FED9FECF46FEFE,$D7F8FEFEFEFE642D,$D5762BA6409CE18D,$F8A7CEFE62375CFE,$FFFFFFFFFFFF9EFE,$FFFFFFFFFFFFFFFF,$FEFFFFFFFFFFFEFF,$0A02000049D91EF3,$6063CF2854414449,$4FA653EA09CE0180,$A793FD0A034062E4,$0582B7B580B69AEE,$F39BEDD6F5BEBC45,$8845482A95602D77,$B7D126DE2E5564B2,$89AC85F3C602D274,$E97CCC98F1506CBC,$C17B7FFAEDAEDB9F,$397904A45F9B92B5,$FFCFE757C9D1E2C1,$36994B7FFCF4F8BC,$0EDDD4F028FE7CA5,$E97D26949B191E24,$7898E7E535C5C9E8,$07B5AED72599E518,$4599EBEA2F9C2039,$D31CF67EFAED2EEB,$B39DCF96CFE78107,$C8F8427621281C5A,$F6703FCC7EDF4599,$1E8233CDB8BBFC5C,$161210960E699DAE,$B090D2D37F907E3A,$F7619008CE36A72B,$7A1090C0CB6BAD58,$BEF937C723FDD0E8,$63A7E894E23EFB7A,$F409E1CD5BDD664B,$DDF97B75A2DF17B2,$CECA235AAE16FC7C,$032CB1C8E2EDEFEE,$F74C8BA3BAF39668,$9BE0B5E2F85D679F,$9658E6ED011E4BAD,$0D07BDE2D68AF40D,$25ACC9F0B9586E4E,$0EE66738BE3D8F87,$C6DA0C0C7939798E,$E172BF5DDE58F6DB,$6A005CB797815983,$2CD02E629E6CB1D8,$076E6B7D330B0913,$773E585C679BC3A7,$A052B93292F2A4A6,$AC562BD39EC89184,$2E172DE6E366B558,$9CBAFD8B39D86DFE,$B3BD2F4EAC54282C,$7FE596C662503D60,$3557F95D79D92EB6,$F719B8F50C74C238,$C4DCCAA55CDECEBB,$241152A29E73BECE,$B97C64AF767935E0,$1BBF1BB52CDAB371,$9B2346859253CD97,$965E36E7C17DBEC6,$22314AAB720CD599,$85BF2F586D48D821,$E4711516CCC6F559,$CAEB7F5DAF4B6738,$C9689C756DEDB5F2,$9113A7A3ABBD5BA4,$D39119DD2DC6007A,$4549000000006D05:Data.b $4E,$44,$AE,$42,$60,$82
+  I_Dice:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$59487009000000C6,$0E0000C40E000073,$00001B0E2B9501C4,$704745544C500003,$C08F8FF92525B64C,$7777E79090F94949,$78DB6F6FDD4444C3,$FE9A9AF92020B878,$A9A9FC6464D09B9B,$95F53D3DE55D5DD2,$E18383F97A7AF195,$9898F45C5CF12727,$68EF5E5EE66868E7,$EE1919B73D3DC268,$5757EC5151C15D5D,$7BCE0909B52F2FBB,$C98383FC6666F77B,$7777F45252C14545,$93F99595F54848BF,$B1A8A8FE7878FF93,$A2A2FC5656C12828,$75D1AAAAFE9494F9,$E0A4A4F88989F675,$6565CC7676E58686,$7DF06060F07272D3,$DB4F4FCF3D3DB77D,$6262C25151C11818,$61C31414A70F0FA9,$F19D9DF62828C861,$4A4AE35F5FE27979,$CCCC6D6DEC7676EF,$B20000CAFFFFFFCC,$0000CC0000BF0000,$00D10000DC0000B6,$E30101B70000BA00,$0000AA8080FD1B1B,$00C60000B00000C2,$E63D3DEB2323E500,$0000D35050F12929,$0ADE6464F5C8C8CC,$CF5454F23131E80A,$2E2EE80000C80000,$6BF81010DF3737EB,$A79595F83535E76B,$4242EC2020E40000,$45EE0000A45C5CF3,$D8FDFDFF7B7BF345,$2B2BE7CBCBCC0000,$69F57C7CFA7777FD,$E11717E17070F669,$5E5EF5F2F2FE1414,$D0FC5757F11E1EE2,$A15959F0EBEBFDD0,$4D4DEFF8F8FE0000,$00DA0000D65151EC,$FA0707D00000B400,$1C1CBA0000BD6E6E,$10CB0000AD2727C5,$B86868F82F2FCA10,$1313B39090FE0707,$59CE3F3FED1B1BC4,$F88686F58080F659,$ACACF66262F39898,$77F38B8BF5C1C1FA,$E03A3AEA5959F477,$A3A3F72525D92424,$7AF26868EE8888F2,$B9C1C1CC4C4CC67A,$8585CA0C0CD30000,$29D02727BE4343CB,$D45555C47474FB29,$8080D13636D92B2B,$69C06161C30707C2,$B75A5AEC5050D669,$5A5AC4B5B5CA1818,$51E42020C96E6EC6,$B4AAAAC69696FD51,$8080ED5A5ABD1010,$6DFF4848EE1515D8,$BC7575F82E2EE46D,$C7C7FC2A2AE20D0D,$C3CACECEF91C1CE0,$C78D8DF6BABAF9C3,$4040E84A4AED0909,$1CBD3434C1D7D7FB,$C8AEAECCB1B1CB1C,$9393C76161CC2727,$71FA8080C78E8ECB,$D0BDBDCC6969C971,$7C7CCB0909CD5252,$9CC83C3CE73838D4,$B88585EE4040DD9C,$FBFBFE6161FF4242,$9FC58484FDC3C3CB,$BF3232B5B8B8FA9F,$6D6DF29090C10A0A,$9EF32020BC2121AB,$B6C7C7F82727B39E,$7070EFB6B6FA5050,$911E6161ED2F2FDC,$5274480000008E79,$044B498A6A00534E,$2425440EE11B0155,$16E7ECFC456CA515,$C07D92E688B46C89,$D911BEE0F7AAFC1C,$81FAD75ED9A8EBB9,$9F426CF8818098B8,$72AEFC81C25BED8D,$75537E8FDE38EBF0,$0000E05C9650BF5F,$DA78544144490E03,$E26262E2A2054062,$DB7B9BBB00380C1C,$B0F9F98B39D1E58A,$F22D2C14880AB349,$826C255C13965CF4,$8B4AF5A63CC05BA9,$E9557591ABB5E7A7,$F579AA2CF268C6D6,$7007FC569BC7AD49,$FE1440F57B010E4D,$B6D7996B6DB59B6D,$9B6DB6DB6DB67E6D,$3DB375BDC8DB6DB5,$710043C2464CE8CF,$1DA857EFE57786EE,$B6616D4CFCA43CDD,$9C472275C260AEC4,$ABCF17FCBEADFEB8,$F3060C4F6F6F74D6,$4F751D70FB0FE254,$9447495F5AF55B6C,$AB8A758C56BBC69B,$EA3C6681E8F69F39,$5C97D4BDDF65ADE1,$1E8D53698D8CA7A7,$9B0146B6436F42A2,$D667BEBB771FBDC8,$C9D861DD2C71604B,$C0C7B85C9A98D531,$232D611D397848D5,$BFBEC75133A13131,$63383CA20085D832,$DF8F0CAA1CAB819E,$10FFAC294333672D,$9383AC60FA58DBE0,$CE181578C18AE45A,$E1D960219C7546D7,$A740283FE21415D5,$29998E49B5D3DAC7,$9294D5CF17CDDEC9,$0456102DB9795865,$55F6F637C0853EB1,$D7D2C936AD077B74,$899D90201FDB59D7,$7F58821A00019794,$5109089D54E62923,$251CEA5FE4674D27,$8B27B685139004D9,$8046BEB1C30E2800,$25BE22D1D1D4424F,$082018149DD3BF23,$161D5FDFAC200216,$16886B20663162C4,$5C66BF8546D4DC89,$800A7C1D3BAA6A4C,$608AC7110A50F883,$565B9BB671EC8C7C,$826A443498BE13FA,$29E3C5958EA3CBA5,$2C6A436C082C4125,$5C1292634E90F2CA,$4D458238107549DC,$4B55D03B741522A0,$2E0CFD3CFB1979F9,$66CB122870629AA4,$133A0A90824B43E2,$5399BE297E6FE66A,$F092B4A0302D3E06,$9F26C7C9B5EF413A,$3A5793B27560114F,$D0119067076CDB37,$E4D2661C0F621404,$5E2CBC6BCAFD0BB3,$422E804D0B92A54A,$7DBA041C6368EDA0,$1A6F856A11FE7E76,$004013401BB0A257,$CF73B8DF2F7A04DA,$2ABA17BB11543B67,$3D804C1504BC78EC,$E2D22340876F8E1C,$38F3373F7D009866,$C00B38261462BD1C,$4BEA0E3BA0AD03F1,$9DDEBD1CBFC7DEDF,$8DB0016D22119666,$D1F7982E3320B6A1,$EE62ECE68D17F7DB,$F8BA80B8015BCAC7,$2A2EFFD5DFEF17F5,$30DEDF1E562F7295,$3C3F2FE3FAFC5D02,$7517348962C51FAD,$C098DD40CA62F891,$1EE5DFEDA920B842,$D0559BB91C1E2B47,$0003F32D05D5C9D9,$7F0A6DE6A2532262,$444E454900000000:Data.b $AE,$42,$60,$82
   ;The following icons are used form the icon set "Oxygen Icons": https://www.iconarchive.com/show/oxygen-icons-by-oxygen-icons.org.html
-  I_Info:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$1800000018000000,$CDA9D70000000308,$544C5000030000CA,$01DA74004C704745,$EB7F00E27900DC75,$FEFEB05800E57B00,$00A15200EB7F00FE,$EB8000DF7700E67C,$0000000000000000,$0000000000000000,$000000D973000000,$6A00000000E87D00,$00D46F00000000CC,$DDA467DC8E37EA7E,$0000DA8D37DB7F18,$00D7A067D06D0000,$C76A00DD8F37B359,$7400EB7F00000000,$00D77100E37A00DB,$E77C00D48937DE76,$8936955000000000,$00D68936DA7E18D5,$BC65000904000000,$0000E2BD97DFB991,$00000000140B0000,$E27A00000000AF57,$3300000000341C00,$00743F00EC81015F,$EB7F00DF7700E57C,$7900D77200DB7400,$04DB9547EB7F00E2,$C56600C96800C467,$9C57D68E40DEA567,$00DCA367D69F67DC,$BC6000D17716B85D,$710CBB5F00D28737,$00D18737B65E04CE,$D17919D38F47C063,$914DEC8000DC7F16,$00CB8640D49757D2,$D49552C06403E97E,$8637E47A00CD6B00,$00B25900CF9356D0,$BF6200C86800BE61,$6500CD6B00C36807,$00DBAB79C66904C4,$CF6C00CA6900CF6D,$5C03CC6A00C96800,$0CD16D00BA5F00B3,$E67B00D8A167DB7A,$8C37D57000D69857,$6CC2711ED87200D9,$D57407DC8521D7A2,$7900EB7F00D99347,$00B65C00E87D00E3,$D88C37D8A572B058,$B385D49C63D27918,$B3D88528BA6C1EDF,$E47A00D88B37EACF,$B98DCE7B22D37A18,$00D68A37D27207E2,$E3B687E1B991B55B,$5600CC7313DA7708,$00E17800D09963AE,$E07A04B55E05AE57,$5800DFB992B15900,$12AD5600AD5600B0,$ED8C17EABE8DE382,$8000DE7600FFFFFF,$77EC8103E5B47FEC,$DD7500D26E01DFAC,$7800DF7700DA8628,$77DD7600D59757E0,$DDB286E27900DAA9,$B57FE2B98DE87D00,$28DC9647DD9D57E6,$DA9447DB9C57D17F,$7F00DC8828CF6B00,$00E0B487D49047EB,$D79955D77100D570,$7200E97E00E37A00,$00DC7705D59147D9,$E7B67FEDD8C4DB74,$972EEC8409C17A33,$93EBC499EE9225EF,$E47A00EA7F00EBC1,$8437D28F47C26F19,$00D69857CE7B21CD,$E17800CA8C4DE67C,$F5F0D97504D47000,$5AD28028D1924FFA,$F9F2EBFBF7F3D69A,$7808D5A06AD38128,$00D37206E9CEB1DA,$E1B381E3B37FE077,$B482CD6E06DBB084,$05DAAE82FAF4EEE3,$E48312BD7022B15B,$8C17EABE8DBB6E22,$0000002A614B96ED,$FEFE00534E5274AD,$FE01FEFE0BFE3EFE,$0B0D07080403FEFE,$57FE180B10FE12FE,$3EFEFE15FEFEFEFE,$79FEFEFEE01D01FE,$22FEFEFE0B1AFEFE,$792C2427FEFE781E,$0B9CFE853254DF2F,$F9FE783FDF78F9E1,$E0FEFEFEFEFE3FE1,$57FEF9FE78FE3EFE,$DFFEFEFEF9FEFEFE,$DF57FEFEF978FEF9,$2EFEFE60FEFE2E79,$FEDFE0F979FE60FE,$FEFE60FE2EFE2EFE,$E178F960E1FEFEFE,$FEFEFEFEFEFEFEFE,$DFFEFEFEFEFEFEFE,$DFFEFE78FEFEFEFE,$FE2E6060FE2EFEFE,$0000220083F1FEFE,$CF2854414449E701,$B0AE573804206063,$6D984D1394BE5AB2,$BDFD5EAF7F5FA2FE,$D752B8B21B275678,$66CD4CCB66A60584,$CB33C420845635F7,$CBE5E7E7B3D9EF1F,$828E4F8C9E4FFB5F,$BBD76BB5D8C88FAB,$B4DA6D375FD96B1F,$C4A0FCD40F978CE9,$2820766EEAC54500,$0716F3F5F191940C,$61E3B091DDDD844B,$1CA79FD96B378BED,$D82A4C40E07FEC3E,$71389F45EFF7599D,$1EB55E930F8EC2E1,$0AA55CA0F079E239,$5434323D37272250,$9EE4E1BEA67F5B5B,$3A96E5696939397A,$5E874383C17E44A0,$67E9BEDF6FB69DBE,$E6B1D8F5BADD6E26,$F0E2D2EC89400D67,$31CF7640F3A9DEE0,$D75462AD8D903030,$B0AA3D1DE5944A02,$7FB2D65F6F8CE3F9,$EB9D96D322FEFB9F,$966F36144A2481B6,$ECB5E7F4F34A7A7C,$7DB6DEE3ACB6981B,$A9E49144A076EEE1,$00DA5E33CFE79AD3,$1DECF984FEDEE094,$0B09BAE7203547D6,$9D81B75CED33AA33,$511D2E5614C6BF7D,$86415C19739024D1,$2BF65AFF7BB85A7E,$C39C7DBB9EF77B5C,$67A1A0677173EC03,$CE3DEF7049025E17,$DCB024139ABD7EB1,$12C183B22FFA80D3,$4AF05816170E0E1E,$9BADDFEAB8DB9C75,$4E2391B3FEAD6F37,$FDAFEB6A2C21110A,$D6D7358DFAFD71BF,$0D899EA14720B1B7,$C1E898D8F010038F,$8D75E4C4840578C4,$2D6DED1D1DED6C2D,$81780484C5E5758C,$46AA122282FC7C12,$E696D67676D696E6,$0C7CFC822212AA46,$9A381AEFBF850100,$4E45490000000043:Data.b $44,$AE,$42,$60,$82
-  I_Internet: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1800000018000000,$CDA9D70000000308,$544C5000030000CA,$1BFAEAC94C704745,$701C14701C12AD60,$4F18944532882E1B,$4D7F3116AF66279D,$721F1394401EC186,$601C9D523FF1D5A2,$7DAB5C1CF1D9B0AE,$A75B23B26B27BA86,$26188F3E2EB7712A,$25AB643FB7732F7A,$8E3722B26A2AA354,$64319B51419D4C24,$21AB6443DAAA59AD,$C0918AEAD2C07728,$1D16711A137C2920,$2DE6CEC1C28A6972,$BC80437D2B258435,$8057C89968DFC2B5,$AE711E17B6733EBF,$731C15B36D4BF5DD,$601C9D531F701A12,$1CA45A1BB0611CAE,$721D14945118AF61,$2A1E711F187A2416,$207E2A188E361A80,$8C3B2C9D4D2D822C,$7D66A05640721D15,$3CD09F65C8914FB9,$964D3A904134C88C,$352DD39F54D1983C,$9BD7AE80D8AD7583,$D6AC7EEAC788F0D1,$A67A812E24CC985B,$5BA55721D8AB88D2,$BE8D8475241EBF83,$D4B8CF9A4DC18760,$BFEFD9C0E8CCB0ED,$B67F71853A34EDD6,$624BF0DFD3DBB898,$77873723731D14A7,$9C4F2EA86A63DCB1,$7046B7827AC99F90,$1AE5CBB9B57F79B4,$87362CDABAAF7622,$382B9E5850833025,$2E77231C79241C8D,$893A327C261D903D,$5F4A9E4E1AA46054,$9185352CE5C594A6,$B67451904741CEA3,$9D7F9F5020B1715C,$479B59519C5950CE,$9547379651499852,$5D24AB6536E3C295,$25C08E559A5419A7,$C58630BA7629AA60,$5521923B1B9D4D20,$2C9A4822CA8C30A3,$B16927F6E0B7C383,$63269B491FBC792C,$72A0512199461EAD,$D0A178A05228D0A2,$5E41EDD9C8AE6C52,$3FA25D4FC48F72A9,$B56E27BF7D2CA359,$A870C88A31A75923,$23A15534C18235D5,$B47663AB612DA75B,$5A2A8E391F954125,$4FBC7A36EDD0A2A6,$C08651E8C486AA67,$BC9EB87D689F4F24,$5ADCB592B26B33E1,$B7774BE8CEB6BA7C,$5937AC6A55C2948D,$55EAD0B9C09082A4,$F4D9A7D6B3A1A865,$6749C69378BE7E50,$4FB3796DB97C44AD,$AD6F63A35C47B36F,$9130B3703BE9CDA1,$3BDEB476974525CE,$C58A45C88C3D9E53,$803DE3BB80A55831,$66D9B189CE9B5BBF,$E3C1A0E7CBADB67A,$834FB06841B47141,$94CC9D76E9CCAFBE,$ECD5C1E8D0C3E9C7,$C181CC9A7DF4DEB3,$69EFD095EEDACAE6,$DBB48292422BB176,$9B62E1C1AED4B3AB,$9FA05744D39C46CE,$B78075CBA39BEDD2,$E1C2FCF1DBD3A264,$000000EE0ED9C7F5,$1CFE00534E527492,$FE01FE08FEFE0D05,$FD3BFE21FEFE1BFE,$FEFEFE70E7FEFEFE,$2DFEFEFEEDFEFEFE,$A8FEFE223C81FEFE,$FE27FEFEFEFEFE6B,$157D0D5AA35B50FE,$DBA5FEC625A76BAE,$FEFEFEFEFE32EFFE,$FEFEFE88FEFEDDD8,$FEFEFEFEBCFEFEFE,$FEFEFEFEFEFEFE41,$FEAA87FEFEFEFE6F,$4BFEF6FEFEFEEEF4,$FE6297FEF6B5DDFE,$FE93FEFE6DFEBCB4,$B9C1C8FECAFEFEAD,$47FE98F5E7FEF4A3,$4916020000105BB1,$806063CF28544144,$AE8ECEEEED754E00,$2CD4A01406161346,$A7B59595E2E85BF4,$BE0B9338A49154E4,$CAD8FEB3F2B9FEEA,$FDC5C2BB78B68F95,$BAAEB5366B14AA8F,$397731D76A7E91A4,$D789CC4AB684A835,$E96EFF38ADCEDF85,$83A988B6FB6E5BAE,$A65E9CA68FB30DC5,$373343C921F16E7C,$0CC617CA5C5670DE,$3E534DCA13CAD092,$E4B1724A22363FBC,$808AF9595B8DEE02,$787E684E9F653CE2,$B79B0625C1FF7873,$CBE5F1EEF33A9C2F,$EE2FCB2A1819394B,$3D93C5E132765DD3,$C1753E9DAD26931C,$545737403DF3E333,$7E31292CBD3D2DB1,$E99124C734971E89,$561D01F31857F353,$0F2FC38AF8ED36CD,$7335CED168B45C3E,$95697EDB3C2C8BE6,$8D3CF72B0D430329,$E7EB9EA181E125D4,$7EACF229339D164E,$BDB4EB1684A065CB,$D67B70790E3F9E47,$74D8E1AF27AB5994,$5506061365D57F44,$980FDC2FE5536999,$4F5653758CC66332,$219B33F65DB03E16,$7BF2BDD6EB344303,$FAE15BB1DCDD7B26,$DEE42DAE2573598C,$EC8393BB21F40256,$8378043B758F1D66,$75349AE06CA77D82,$333236E7C8065B1A,$19EDFB37E3B9CFA7,$34DE17ADEFBB8FDE,$7EDD82480F0B9A6F,$CF67EF71C9FCD4A6,$F4C7036AFBC33A36,$26276BA121C4DB79,$919188C14B3A21C5,$B699DAFE624B2051,$CA73BA79F3F8B0CC,$997C376718FF5F8F,$993C871111D8BD2B,$DAB817FEAF7F5C8A,$6E2233388E40FDFB,$4DE82FFADAEBF9D9,$4067641333E831D4,$6D6D609CB7341096,$C0C12C8FC82E6966,$16560404C5616EC9,$CE5FC90011109CEC,$000000A68ACC62BF,$6042AE444E454900:Data.b $82
-  I_Magic:    : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$544C5000030000C6,$EA3F82BF4C704745,$08090B1B8DE92F71,$527E0A0A0A0C0E10,$D017171707070713,$080808151515198C,$090B0063863773E0,$1C3675EA0E0E0E07,$0B0B0B0101011C1C,$0F13121213080808,$14A6B5BD0E67A10D,$0B2A57040405080C,$EDED303237C3C6CB,$EC167F8DDDDDDEED,$6262622D2D2D1A87,$66664E4E4E555555,$040D0D0D25252666,$1818180A0A0A0404,$BEF33AD7FF070707,$1310101009AAF600,$0202023072EB1313,$74990F4876050505,$E32A2A2A49C6F100,$01DEFE0879D826CE,$D4D4D4D4D4121314,$3350BDE9009EC5D4,$122840BABABA3232,$7DEFE5E7EAB9B9B9,$2CB4B7BC12203833,$6D98E42222222A2B,$2B5D61C8EF2A2A2A,$38505051697C9E07,$1B1C1D00D7F63033,$858520AAB4424D5F,$4C1F4F800E0E0E85,$0000003C3C3C1D32,$0404020202000000,$A174C1D40976B204,$2169A5B5DFED006F,$709C9ED6E700BBFE,$FF9DDBF671DCFF00,$1AA1F0A7E7FF13B9,$A6F03072EA3071EA,$EB3072EB0B93D402,$0E8BE00505053072,$6FDC49A5C70B9CF8,$FF3371D00C507E2A,$2DBFFA3072EB0EA3,$2323373737214C9A,$8300CEF92654A823,$0DC5E03071EA0067,$93C52F71EA38869F,$F69C9C9C3C6F9C0E,$000A1BBCBCBC29A2,$608605B4CA2969CC,$B9BCBCBC4CBFFE34,$146BAF2EBEEBB9B9,$DADAB8B8B8BBBBBB,$FB0792FA104473DA,$C3D3F00F0F0F59C6,$C1F9072F773D3D3D,$FEBDBDBD5191A22F,$548AED53C2E314B1,$CBDA74DBFEF2F2F2,$4B8AD4E822BBF792,$0A3E700262D22437,$81E31090F70B3F93,$FD20D0E193ADDE0E,$525252CACACA19E5,$DAFE00B4DBADADAD,$B9008CA400AAC413,$098EA746E4F100A0,$F3FE38C2E100E4FF,$A9114373467EBA7B,$0574DA1A242D1E5D,$64CE081325707070,$991141733E444F18,$356CC9126BF73458,$3C5C6B6B6B274C88,$2E2E280528050F29,$3072EB0101015A1A,$28280505050F0F0F,$5A1A1A1A2E2E2E28,$0AC1FE3B3B3B5A5A,$C8FDE1E1E1ECECEC,$422F8BF31B1D2128,$60606035E9FF4242,$B3FE015AFA727476,$4C17171745BFFC1F,$149CFE07B7FE4C4C,$C9C9868686F5F5F5,$FE67D4FF56CBFFC9,$4EE7FF19CFFE3DCB,$85FE5F74983384ED,$473C7BC76A6A6A0A,$03429E1070E81728,$66EF0A78F42479EB,$000000ACE633540E,$CF0600534E5274D0,$13411801140A1B0F,$63ED38FE1E240D56,$320C27826DB20756,$FC182D421742872C,$D70460412C421B42,$5BFCE9EFEFEEE125,$C23BFB770FE1F5B6,$214ECBFB4152F880,$A0296DFC1C182E44,$CCFD4C75332EA788,$6A8F4B3C294AD1F5,$5B30A29C9F65C468,$EFE1F54549EE4D46,$58D48DF3A42EEAF9,$B6BA2597D1FAB73F,$3CF738B3FAA2F9F6,$CBBA6436DF8181C1,$A713E2652EA84E68,$6A6A834D87F99CDD,$CFC057E38CF056C1,$5466AE2BFE2DCCF1,$F3B26EE0F5A77AC4,$6F64AFFEDE503175,$C2139DF8D4FE4FE8,$BDAAA4D7E82DA629,$AEC6A9D85FC1E0F9,$4144494B0200000C,$D80D206063CB3854,$44B4E4C94901197A,$8626B6729AB22C46,$7A19D9995C0CECA6,$5CDE19707D2D567A,$FF9971E9C023C910,$BEAA564184832A86,$82A830C6CD8DA37E,$19292756060666BC,$303126F777A09919,$043B99344BA525F0,$60CECCC1550DDDEF,$B4F3B28F5E76BFE6,$EFB1B54227ED77F7,$5973610EC56C7E0C,$9F95970B5697F6AF,$BBD5B86EDDDEF53E,$7EB99D2B0457EF1E,$9DB38282A84B0B0D,$7B05709DB7FB42FC,$72EAAE6029026CBE,$276399F41008E0E1,$A83940ADC9F9BF2B,$8BF2403BEDBED73C,$115E0805B3B17026,$AFD8FC3D55BA5854,$B79FC9F6F9101E6F,$3031661F15E901F1,$A9EB23E2586EBA30,$D81069FF827AA11A,$7EF2401C773505E1,$CDD3CF0281FA3ECB,$9773CE6E51F48B6D,$F3CE75740C393D1F,$C9FFBCAE6870737C,$F808A8AABA4B4411,$F27A7CDC86AB72AA,$9B107C09A537BAC8,$2DF408EF99DC5B96,$469A949A8A870BAF,$9A577DFFBF3FD9D4,$5FF7C582CBF70152,$3C88CEF5B794941B,$FFFECF67E9F8E870,$5B148E39107919FD,$50F2B95FB85E2CCB,$CEA733F757E1E949,$66EC8D1685E1F83F,$AB51FD1D954C4C29,$CE072FBC85953942,$84605E466B8CC115,$5C9868680A59C871,$3870F0BD238DC5BF,$1EAB7ABECD084729,$DA04E5F0E3628A57,$198197818D8EBB71,$216E4B160E76028B,$0B8D0418C4AF9BDD,$2629CDA1C9A119B1,$2615F5434851ED7A,$F16E2950E812E96C,$2A615D32D46FD7CB,$ABD3314E1650EEC2,$DB543A718C25C5B7,$5C76761D0DF2F448,$7CBDAFC404D9D80A,$6B08B268F73B8C50,$48897F278F1EBB5D,$0547822BA9BE5DC7,$797C6155FF09B08F,$0A7C5155F2E62594,$A7C1E4335F2F63D8,$0000CC1A274B5582,$E6C65A9C17B2E5D2,$444E454900000000:Data.b $AE,$42,$60,$82
+  I_Info:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$41444993050000F4,$24900357BDDA7854,$DF6DB38D5D7D1449,$D78F6B1B6DB6CE05,$B7B6DB6DB6DB6DB6,$7AA2F97FAACD3D97,$62F11FEB3351A6A7,$9F0B66657E1F3272,$0EC30408CE7D7FA5,$4709AE14782A7111,$7235C7398E08EBF4,$686EBA489CF3C7CE,$2B0F0AADC2B57222,$C70447C296F0A73C,$0B99B2E4391AE39C,$61A7766989F6206F,$7A352DE3D86CCF18,$D75A6DA73DC18ED1,$821BC9E76F06F265,$10C778BD1B9CC704,$417F365A86A5C872,$DD110DD19409F00D,$F4AA355D8AF27C78,$6232D5E8E5ABB859,$5C8CAF68BD192EE1,$C70427DFCF8657B0,$B518B49760BE1B9C,$B5E47A5A86A5C85A,$ECB69BF3AAE1B61B,$9ACAE671D2907EF5,$E3A43B99BF4897FD,$A0BC86E870D2AD84,$47A5A86A5C84DB38,$F3D244D764DFA224,$5FEFF360BB1AC5E6,$D2B5E8F5B2791CD7,$79ED6035A926D472,$F351A9C7956A1A81,$C0DBE77A4F41FF36,$FD2EC65D3D7B4DAA,$D623668101ACEDE9,$021755D2DCBED54A,$A4F45E84EB23556A,$470D55FE3C0D9E77,$A740BC7D9F93CE8D,$93DD72972DFA3513,$76DA7BD2E5B76CA3,$5B39CC70402A7639,$C6F49E852B41BD7E,$BF7D6E06DB34650B,$D02C2C9AEFF6E7B2,$24B0AA5E75A4AA6C,$975850922CBAB229,$977A7E5B39CC7168,$3337A10CCDA252A5,$53D0B955BF701B6C,$B7689512AA4B3A05,$E2B8942EBBE516C8,$99E54BAECC9A9E5C,$67601B491984DDA2,$964C1ADFC6EABB78,$4F1B3F89E5E6AD42,$E638B44A8E3BB597,$3308672DC2BABE5C,$F0FB4E5E00D09598,$C8E62D7FC89BEFF6,$18B6060BE766CDDF,$DA45349CF8E08ABE,$31782E6D7E0793CC,$6AF0F9780698A3ED,$D8670DAFD16E0B66,$537AA7E5D306E7E2,$B82CE53BA891F885,$309FBD2778BE4E46,$175485E00D39998B,$F910C656F79ACF5E,$926B557C5B54EEAE,$F14D37ABBED715D8,$BC128DABAF8F7B08,$E581AD99331E765E,$A0AB9E5C47800F10,$60586082E872746E,$C321038E28B08157,$F20065478FADAE41,$E14B8880DA333448,$A60C163D11430E46,$A7D547FA288F32A9,$86415F11E38AEDE0,$32F1891A9AE51792,$B9998B303539A044,$E1711853E668701A,$AE80E26698408650,$A499D8D478761079,$AF6A1A97209C3301,$ECE9C34B8F0DCABE,$B773A1823EEC3600,$E41C3E2C0BA67722,$D440F00EBA102FB4,$68706ACD814D3404,$327C08F502AF688E,$06221ABBAFEBAB24,$204CE20ECBE1C63F,$1B2F8CE28FDB158C,$D399986725587430,$B2FAF210DD37ADC0,$4BB76EF879DDAEF7,$BAAFB959D5AECC75,$DCD03DBB1AB72E0A,$4083047CC5D3A702,$DB5B381861801020,$50A112763AAC21BD,$5A6C167EB7943018,$90C00DC6C0A188C5,$9CBE197ACEA4CC3D,$51DD7C13359F09DA,$BF05BD8FC1576DF0,$28D7F0543EFC140C,$0A09260504E3BFC1,$1BD7AF148FFF534F,$4B90E46B8231FC03,$6F4D3D17A0F4B50D,$AF399989D694BC66,$88991026589EC782,$1F31D9B575C069E0,$EB816DC26D4F5095,$E59D4C72C674E5F1,$9989322199BD0D43,$A9FF0198E96425D6,$70314530E05160DD,$B9D700D090A3D8D1,$304CD2F4CE824E46,$F8F034C494E990C3,$BE11DC24449EB77D,$89439140BB9B8043,$3C33C1E678276B35,$6B8A703DCF14245B,$D73D8E0F4B5393D6,$5982CC19800FA702,$BC56FAB3EA869FB1,$F4CF35F73F0EB19A,$664505130282D1EF,$F3BCF319E7CC4A08,$96A1A972154D0A04,$8CCF5EF2A7A2F41E,$76F799B011D699DC,$9B2EB8382918617A,$1BB985169F6E6A67,$D1D612E4D69F16F9,$2AB90330A46233D1,$2CBE7C267D7530F1,$B6E5BE8F1AD25EEC,$AB5B835F70039C2E,$447A58D175A9A26C,$BF2F59689C820C21,$B10B3027A0C20BED,$4A14283F315BFC95,$6A50E4BE3E4AEDE0,$82758C82E5948991,$EEAA097695045B72,$F8B1C8D71CE63827,$CFB8A62F5E83D2D4,$9485E1BBBF0177EB,$56D97C26E65AF0CF,$590A8D7D20B66C50,$504DBF2824DAC82B,$E46B8E731C10A771,$658BC66ED28D4B90,$3C334FF05D03E33E,$378BAD4A5E17729F,$0B23B9889BE01DCA,$391AE39CC1A246AC,$C86DF925ED4352E4,$7802D4C5E19A2D77,$3EA8DACF5E106D25,$638221AABDE24F12,$64B9A9721C8D71CE,$0CF5CA47EF134E3F,$FC5CE638211F7F51,$7FE3CAE0680BEE57,$22890B8594BE1F01,$444E454900000000:Data.b $AE,$42,$60,$82
+  I_Magic:    : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$414449EE050000F4,$64786357C5DA7854,$4CE9BA2B613C16DB,$B63C463C5EFADB6C,$C56DB6DB639738AD,$FD9E6DB629FA7B63,$7E0CC6F99EEF7D4E,$B55AAD76BB277354,$3F14BB7C427D5357,$0B4B60C5424A87FC,$9FBBE470A14203F3,$B5719653263D5C27,$8ADD13F5F6BFC177,$046EDD25E45A4DB0,$556DEC5D25656564,$82829D78B8B8B9B0,$60BCD6549494AB42,$584D46B97FBE18A1,$226F1C148B37B29F,$00A8FFDFE475A1A9,$BB27BCCEDF1B9E72,$C812AFEB2915F1F0,$68FDB50E2C31770C,$7393939595CB9721,$9C55D571F1515155,$6D0E3C044626262D,$1DDC1E0F064D6D6D,$C53FA933954E0E6B,$2A8E3A0AC231222B,$54E7A6802AA449AF,$D4BD6408D62E9D03,$0967D9AE94E574BD,$62DC08611ED98714,$EDEC1DF0C9C82BDF,$05CD43F6B86494F5,$B65D3ED83AB859CB,$313122CACAC9196C,$DA5226CBF5D9C731,$BD5084F72352E707,$04677DCA54F16840,$DFFEA4F51F6F7D15,$DEDCAAE8A5C91D54,$356B450249F12085,$8FCBCAFAA34959E4,$8F1C12F66E44E0B6,$56FE53E0D1ACE1B6,$DE7B636363DD5656,$488F47A3F96371B8,$F12D448911296969,$F3FF0F952FC2F1F1,$27229048126A1AC8,$2D462E4FB3E0B282,$E209EBC1771BF3FF,$DFD2D2524A404177,$4FEEA5D2E972DFDF,$3DD656565EE9DFEE,$09AE2E2E2FD93939,$F8B7DA604304800A,$9AE804173500E628,$88FD5657CED71A3F,$72859C8CCE26F365,$AE3C05DFFC9E2199,$B4F4FF7BAFD63006,$03EC4E67A7002B34,$BAFA713709090912,$6FD89ECF67B23ABA,$F814802F1D7C7021,$4008F79AB53CB693,$B321FD5AEE58727A,$470E1CD68AA6DE27,$48E2DF74E7F7D815,$BE578FB31DDCB2E7,$7E3C2AB39B0433B9,$C46471B8DC7238FC,$1D0DB03028241188,$576DD66CA1CDA5F2,$CEA29EEFA42C9D11,$5E9517D39BB7B3E3,$F8250458D9BE49D0,$2D984979BB12BE7C,$3AB6AEAEA81433C1,$7C532994E06CF67B,$A98FB0B721231250,$3E3BA0963111D90A,$8925CE72CDBDF9B7,$857292350BF469D6,$D3886812DF59874A,$87F72D210C9E473F,$5BB8C20100FF60CF,$06AB6539E6ECFD35,$2BF5FC793802853D,$39E00725A63B6866,$445463B411E7A7A0,$CDA2D4CA7C674118,$2DF44D5649CDB582,$C554039BB037413E,$444D044A740EF1C3,$B0D86A987F5E0953,$B60E0E08134F20B8,$75BAAC4242432183,$CCE67330990436EB,$9413BBDDEE84C8B1,$57235DECDD50CAC3,$CA90EB2FA62F541E,$91930FC76835E263,$94D0F6D29AAD142A,$3FA04251483C4FD0,$613098940490FC3E,$B737373230800682,$1A9A5ACF0241E9C6,$F7085409D5D5D4AF,$86B1D4847254E5F9,$B8D2251EF4750A0D,$3D88778A297CD047,$A8B26C9F92A087F5,$B2DD34F205AFDFBA,$6464DDE0780901C9,$9E1284476802094D,$CD6BDAF9C68C8D8D,$09775F6B726BE158,$13E57F6A40A21852,$3D6F572E949F297A,$A31940BCCF69533F,$CD0D06368705DEAF,$39D7D04A0AB03DB9,$EA7AEE5AB99A7104,$4F1936A1C5EDF35C,$78B0A9EF089D9BA7,$F7BD79D8FACE8041,$D524F9FB7DAD1C9E,$211E6A6C54CC377F,$37E4A472298A8046,$E17582770FE0F243,$9E886DD77E117E3D,$FDA383E175CCBFDC,$E2A45EA4D691415E,$DAB350007456872F,$712D975E0054E086,$9DCCA72CD1FEF820,$47FD9BB946131CC3,$E0833198CC834B4F,$8223F218EBE1FC96,$02FF4E63F3D74E8F,$FBAE67BB10EA1978,$01F243271CE365A4,$A221304E1083862E,$FEBEBEA273535359,$51E1E1E07911980A,$C00F32ED38081029,$80FC1397BBC1F0B5,$0BC25306E8CC61D0,$608253535368AE00,$0CD5C1206C3B4182,$2A013200A125B812,$C0404062DFCBCBC8,$48444E8772E0C0C0,$96EF14A24B40904A,$34B8B8B88DCDCDC1,$1BB5286C49DB0D63,$14A1597004057801,$0991CACF98241C90,$68FFF8A844BEBEBE,$1BB51031AFCE3BFE,$46A4E60903447601,$8CC4B9E5321B0150,$C8313A8088C90469,$A181019EB8D995D8,$1129AEF02376A9E1,$6508BB2F2841504E,$3BD5F2EDAE311980,$76B0F3CC02598D84,$C05560A5129AC025,$D184200BC2330AA0,$94DA7E134768250C,$402A019474C60528,$E805F82CD5555501,$A9C05C810CEC0250,$5E647482114603E1,$2894CE7E1B7BB57B,$FF92929221FA7305,$53A7BD7981780906,$2A4C0CCC60880008,$7C4D6892D01947EE,$44054253580429DE,$8D3BEF121825A633,$2A17751450528000,$4A6004A9D98C0080,$3BF017801064C086,$60A436011A74CA12,$7F27FBBBBBA2B446,$326D265D6D0FFCB8,$49000000004AD0E9:Data.b $45,$4E,$44,$AE,$42,$60,$82
   ;The following icons are used form the icon set "Snowish Icons": https://www.iconarchive.com/show/snowish-icons-by-saki.html
-  I_Done:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$8AA4440000000308,$544C5079020000C6,$000000004C704745,$0000000000000000,$0000000000000000,$0000000000000000,$2180590000000000,$0000000000000000,$0000000000000000,$0000000000000000,$0000000000000000,$0000000020805800,$0000000000000000,$0000000000000000,$540000001B7C5400,$0000000000001B7C,$7D5600000058A583,$7E2281592D88621D,$27845D30896451A0,$A17F010705228059,$7D4296722F896453,$29865F21805850A0,$8963469975358C68,$7750A07D4A9B782F,$00000056A382489A,$9672388F6A27845D,$6E020C0846997542,$0C1C1553A2803E91,$9E7C3E936F499B78,$62358D683D936E4E,$3E987261A88A2E88,$9C7B27845D2E8B65,$772A865F2080584E,$378F6A35906A489A,$8C6700000038906A,$7D3B926D2E886233,$0B1F1700030250A0,$855E2C87611E372C,$6825845D4C9D7A28,$27855E24845C338F,$9772499B78318D67,$712B77570C38263E,$449D771A5E424493,$8C6638906B2F654E,$7A318D672A896130,$24845C3D97724A9E,$8E69020A07429773,$7D172E24358F6937,$40937065AB8D519E,$8F6926845D2F8A64,$602274521B493535,$51A27F29865F2B87,$7B5754A2802E8963,$CA8DD5B0499A7725,$97D8B7B3E2CAB3E3,$DFC38ED5B093D7B4,$B3AEE1C7ACDCC4A8,$C2E8D581C0A396CB,$B799A4DDC0A2D4BC,$9EA6D8C0A2DCBE74,$B3E3CBB9E5CF7ABB:Data.q $D6B2A9DAC2AADAC3,$B5A2D5BDADDEC690,$96D8B6A2DCBF94D7,$AF8FA7DEC2ADE0C6,$B977B69A8AC3A967,$6EB394A5DDC19ED2,$E1CA99CEB59CDABA,$B9A5D6BE99CFB5B2,$59AA8786CEAF93D6,$CB9C95D7B571D0A6,$BB7EC6A787D6B263,$95D8BA69CC9F97DB,$DCBFB1E0C988CFB0,$879BDABA61AA8A9E,$6EB5967BD1A95EA7,$CBB195D9B898D3B8,$9FAFE1C893D9B791,$94CBB195D8B67CBC,$DBC3ABE0C591D7B4,$C8AFDFC776B99BAA,$0000B5D4EA3DB0E1,$0300534E52748900,$06020F0C0D01090A,$0816120405C51C18,$29C50E151B1F0B13,$220C1410072A2719,$3A96C511071A25C0,$07862203C5D7C112,$04297B31D8C6C502,$0137F870CF2103FA,$71F4015222030BE9,$B335F5BD5B1FFC93,$5AB2EB24F065011B,$C115A8CB03011D18,$5F70112A41C3FDEF,$76E2E84F021A8242,$025DE02520A840FB,$7A36F0C2E5EFFEF9,$0DF9D910DA0EAEB1,$496C010000492FD2,$186063CB38544144,$BF09535E4040A050,$9306057E3A8EA1BC,$ABC14D599BCAF025,$0A7C636CDE76D2C0,$DE4783C398CD67CC,$23028F0BB3BBBEC2,$9F4DD81578BD9993,$D5DE538BA5D9D9D6,$2E069267B3B3BBA3,$A77B3A8B85BF7779,$7566B21052E2AB6A,$83E4B85AA6B9FCE7,$E3E93816FB3BBB42,$FD4B9D25AAE04174,$E5C8ACE18344D01D,$7DE4D0DDBDFB3ACB,$F5F084AC20725312,$26FBC9A27A578B7D,$6FC6660C5F9BDE6D,$203E4D0BC2BB59E8,$810A8A7BEDD6D379,$AC22EB3DFD03BCCC,$EEC773B05A95DDD1:Data.q $6DF76ADA5B9A475D,$92F4F2E98CE718DB,$74DADE389F0FFB2D,$AB9EAC28F284E0E6,$E753F9ECEC7A3FA8,$DD697EF0E1A4D62E,$C2CAAA5E27A78985,$564E131D8DB94019,$686CA98C7794E267,$C1C1C7A2EB1D943F,$C9C7C1C32482C2C2,$5525C62426AEC6CC,$25C2AA2DCDCD1196,$CBCB24CACECFCF20,$E317E69201C75201,$9194969309B11512,$1296E11456569491,$988464E265639210,$CC2CC829C7C8C2C1,$6CACE2040ECE2AC6,$441C8CBC9C824CC2,$6D306485F8005065,$4900000000CB9C02:Data.b $45,$4E,$44,$AE,$42,$60,$82
+  I_Done:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$2000000020000000,$7A7A730000000608,$4144498C030000F4,$19F02F7062DA7854,$52101D46CB574C50,$5CC01CB62003CD23,$6DAE36DB5C30A339,$9D88DB6DB5EDB6DB,$FD38DB6DB6DB6DB5,$73EF7D6338DBB533,$20F64B46DB80322C,$BC8F132800916480,$AFBD0DD56574DF7A,$B9A36ACCF0024433,$F84EFC32DC11B25B,$A7A8359B13946A00,$C7A00F8553BA2B66,$AD6A517D3212F4BE,$85EF8020C475140F,$4E330EA36AD4F00B,$0C2DAF215DEB121B,$3566769340130B6E,$AE0830D6DCE9BE0A,$FF4C7002215C83B0,$9ED5C999D5F343C2,$C3B4803E13855E10,$B837242A944A452E,$803C112C02BFE263,$F1FEDC7912F4ED26,$1049AAA359CF4D9F,$0289EB9627844796,$7D451E785E65D005,$39E154442B854242,$99E15DCBE20B98E2,$0AAF5B8F1314A6D5,$4C3E18A761DA4014,$4AD0F1303C1A521E,$EDDB4905F5AB4847,$19B4081FCBECFAD5,$E1AEE3B4A5F362A1,$20018D990F6F4D5F,$12EAE5C0C7A074EF,$62C26BE687C37781,$3200C44D5910994A,$5502617E8740039B,$EDC76963B75C9DC2,$77BDE7397117FFCF,$130BD1B52024821C,$F3C7EF6B06F26B4F,$94079EB85703B80A,$E53CBA6FBDBE07C9,$2FB1C60D34CAD981,$258FB9C66D39EEFE,$666284B6E5F6B76C,$9201A91A8F55424F,$6CC4481EB895DB76,$54143AD87495DC36,$BB6E209645C10E68,$3D5FD0FFB4995BA9,$05114477956CC0FB,$59A4F83A5AD8B54B,$42227AE380DB74A3,$310B65D33DFB6B1D,$DE7A02562CF03895,$CCF3368026AD8853,$2B3EDFF566DD849C,$CC63EFB5A2EBB8E3,$3C470A4288801CE4,$648D3C8BC6EDD8D4,$5EAD35AB63F0E848,$2F95802C9528FA99,$03C8462024757105,$31DF97AE0681B12A,$1D8DEB33DEF6BD74,$589009E72821CD39,$BA19E5D62D8F01E9,$E932A1332F937D5E,$B7BE16DE12C8FBC0,$5103A253E0995F91,$56A78273C9083835,$C9090DAC591F6A1B,$1FDEBD20D3B323C3,$19F01EA33677ECA4,$D1F7ED87295287DF,$021AE886465D1C3A,$AC0BE756904E6CAA,$A6AC83F668C85D78,$7825421A1DC45020,$EF91D21562A6C08D,$43A8C5A548AE9BEE,$CFB60275CA204B56,$2519E5E63D06096E,$882FCB1F0223B1DC,$0D6D12EA8AE17C6D,$825BB3C98E19E9EA,$2F0BFEA507EFCEC0,$878380BF79A78ED7,$4F45519B9E5C5189,$5ABC2CDA53D4C99C,$714EFFB8F2FB66F5,$32A2CC72E63A4D52,$0C0CCC8CECACCC3C,$CC04C308CC504C0C,$30B6139D81002886,$19C5D1848CC01921,$BCB8F5E47898B9D9,$190C5016B2FE9CEF,$FF4AF431030C0068,$021BDB1ACD778BFF,$5D5D779A02443406,$D7464DC2BD7A47AA,$9E9C319F180196DE,$97C3FDC315A5C701,$78330C803F376F73,$A0691011847D19DC,$BA638009F9DABEE8,$AF2931C4C665EE01,$4E454900000000E0:Data.b $44,$AE,$42,$60,$82
+  ;The following icons are used form the icon set "Mini Icons": https://www.iconarchive.com/show/mini-icons-by-famfamfam.html
+  I_Lock:     : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$0F2D280000000308,$544C506000000053,$FD4C7047FFFFFF45,$EFEFEFEBEBEBEDFB,$B4D8C7F3FBB9F0FA,$FDD2F5FC1CB6DC21,$A8ECF9E2F9FDDBF7,$D3EF80DDF392E7F7,$E34ABEE75DC9EB6E,$0D7FC376DAF938B4,$92CC118CC90E82C4,$D891E1FA159DD112,$D5D5D517A5D41AAD,$ADADC5C5C5C7C7C7,$00000003A92F6DAD,$E500FF534E527402,$49670000004A30B7,$83C885DA78544144,$DB59D1440C510501,$7DE6F93172AFFA66,$C25E5FA6067181CC,$0A565E79E6080570,$05B0429CB672DB38,$E78962F8017EB247,$30A330082301DEFB,$4E28857A1E275C08,$A15F68728BCB3492,$3FC10AD550AF0851,$6D77D4C29AEA8718,$709C1D8CA7846B53,$00008E7F6FBAB90A,$42AE444E45490000:Data.b $60,$82
+  ;The following icons are used form the icon set "Led Icons": https://www.iconarchive.com/show/led-icons-by-led24.de.html
+  I_Complete: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$4144499202000061,$41F02F7062DA7854,$02B8808459EB7BC1,$41A68C03936D0188,$DB6DB6DB3E2F4410,$DB6DB6DAC6DB6DB6,$CF5D49D6BFDB6DB6,$21B6357EC7DE495A,$4C49F89EC22289F2,$1B100D1657DF5BE8,$83D44F28D7F74C8F,$4F287155F5062AA0,$4F88043BE7B64032,$143F40180C48D504,$D6899B89A3F7F563,$6E58D0C273345C86,$A378D5345D52868A,$4C122A6E668A9045,$164C019E9510B04F,$7B150E62423A378A,$B6CD52FA86A25040,$F0217CFC1650A0BB,$14055A1698533FB3,$E69E4C27ABAA7662,$F2417F348C3C67F6,$5F4368EF08E80DCF,$2A9A50A513F210F2,$09D915D003A9430E,$0C2F6EFDF8ADA11D,$3B982A684DC33ED4,$ACAF8FE621E5E7E8,$25C9EAF0E707B3C5,$EA8F166B1FB4BCDC,$B53BFE0371B2FD62,$7AC0EA199EDE3677,$6D8F670FFB63EB10,$E2D7687007CBADC4,$7420A0C7DFE922AE,$6E40BFD6DE7FC07C,$9BC7F1AE6A680B32,$68E96EBCB57BAB7B,$B9EC07A71087BA2A,$D2A9A1E757A7BFD7,$677286BC0165CC05,$8C3CE2D7C15F33F0,$A20A32E4CDC38E95,$0A3DEB2F1C4DB75F,$E58C28E0CDC01F23,$A709B8077F5DC3B6,$935B1015DB6658D0,$EF53701FEE410EA6,$E0A7F4DC08FE9780,$EFB3BDB59E20BC65,$27059E24E0ABE4DC,$52C9C1F769F808FE,$7EED984B6D990167,$045D26E02ED54D1F,$74908E9D521AE537,$9277D3BDB66F9E8B,$AA68BDD89CC9B74F,$D3BDB053CF9E41B0,$ADDD685392418CB6,$53CF750E05F9C821,$F028A077CD62357E,$87713818F1277B28,$CCB1ACF53E03DE48,$CED2C05993928112,$8E55C94C6091248D,$4401D44D457F6410,$FD5852D8A3806E1A,$D98BA84D9B64845A,$99245B3C9A73F249,$92ACADDF5CB2621F,$6454E625F507BC60,$26EEC5D45DEA5E0F,$69CDCA9BF8DB5771,$2656FFB07C939A27,$6ED91E3E28127ABA,$70635ADB549268B7,$52410F79E391D5B2,$86FA987BEE96DD6D,$E41D024C894424CC,$D73FFEB7DF989130,$006BCEB155A0582D,$AE444E4549000000:Data.b $42,$60,$82
+  I_Internet: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449D102000061,$41F02F7062DA7854,$1DB880E4C3CB0DC1,$01BE287FF1006F88,$0480C4CF57439315,$1E8539F97BD98CCC,$544EFBE456645906,$B6C00E4D740608AF,$6D72F69AFE1800E3,$0F5C31B6DB6DB6DB,$6B077B6DAC1CB877,$C5C7B9EE31E6D9F3,$E74DEFCF35E4DA49,$4BE1E0DE717FF2AB,$BCE3DD9F73FEE75E,$320D81BD787E6F43,$DE47A6B2B3BAB336,$FC69BDC7EFC5E0BA,$B4C4609D375291A8,$4BF4D365F969AA83,$BCF7FF5F315299F6,$FADEFFB07A35D9B1,$F763AEEA3BB7FDC9,$5B34318C4B589F3D,$11C21E3AE2E108A3,$CCD3E39F63209368,$DC007597789CBB21,$D68775A761DDAEF3,$CD8B658E2DEF74FF,$6E30C68F9F9B22B6,$B78D936189240FCA,$6438C8D1A03001C2,$8EFF82EA6776CDBB,$F2529EBBCEDD6F59,$E194568E3D7683AE,$8343128D6A2D09DF,$D85EDDBCEC3181EB,$810071C20397B1A7,$FDBE4CE7DE8E038C,$5C8BA9EA84BBADFB,$62D8947A2286F023,$1B0DD248DBD641DB,$346310A9E9F32A14,$5324327A13E92746,$9494F5D635898598,$24FA1352D50DA3DB,$17AD0C15C71F5BC2,$E03770198FC4D7F1,$D6B43D75C0EF53BC,$C41CFDD427EFFCFC,$E5DCF64A5215D61E,$70DB3626E93ECE10,$E30D568D02B9B257,$8CF325A0A9B7AC45,$C24C484E890BF19F,$C7CA0491DA30C0E0,$51176D1D994942BA,$CEEFB067FEF8715A,$FC2D86E9572C5327,$8E891CF5AA226914,$47588F3CB6491389,$7CF839DAEB00BEE8,$D7E3A4B151BFACE2,$27497E8867CC65F9,$5DBB40648874A76C,$D6A6FFB3C988A947,$758DBD668F4D22C9,$4CFCC7BFA5F25285,$73D19FFFD3F3A83B,$B62DF43B4449845A,$CB9E53254FCDCC07,$0A2098FE82BFE3EF,$03FEA85758CA1628,$7BDFE7A9ED7AF5B2,$F8C40CC2FF8BE98C,$215433ED95374F91,$26E9C7EBE379F3CA,$DA744B0B72282423,$D0F758002BACA7ED,$9572954BCC99B307,$0B4272D17B090C20,$C8AB8086E0CC5F4E,$0EB25FD72B522FCE,$77751D1B7930EAB0,$E50CA4EE767AD2BD,$73B49523EBBF0D5C,$9BCCA30B5407E043,$B4C3ED766C66C59C,$2794A77758AF6392,$FE5C2CE598A61653,$E76E004BF3B5A76F,$00004E197C3C51EC,$42AE444E45490000:Data.b $60,$82
+  ;The following icons are used form the icon set "Glyphish Icons": https://www.iconarchive.com/show/glyphish-icons-by-glyphish.html and https://www.glyphish.com/
+  I_Control:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449BC00000061,$83082F93DDDA7854,$B760F7B1D7C61440,$6165EB9ACB0459AE,$F63AE327B06EB2C1,$0B3B3D7B75C3AE1E,$E38F0BF07BDB860B,$EEF8E3F0B1958C64,$2BE9DBDA1E2883FB,$08785E9A69A0687E,$8BB8E04C2704D851,$53D31AE5A03B7A64,$31981DB57AC868F0,$6708BCA4FA70210A,$08503D656076CDE3,$55EAA723E51308E8,$82827BBD092E5ABB,$47C43A0752BC62F2,$4E2910181D3A00EF,$26303A0CC9DB83B8,$F0EF5BDFA6D09B97,$A2D16C5C0DCC61A2,$BC25709E12A06E5E,$E99F83FABE4C668B,$6A8D5B3947EDD405,$4E45490000000045:Data.b $44,$AE,$42,$60,$82
+  
   ;Winning animation:
   Win:   : IncludeBinary "Win.anim"
 EndDataSection
