@@ -35,22 +35,18 @@ Enumeration Menu
   #Menu_EN
 EndEnumeration
 
-Structure Occupied
-  X.a
-  Y.a
-  EX.a
-  EY.a
-EndStructure
-Structure MPos
+Structure XY
   X.b
   Y.b
-  Rot.a
+EndStructure
+Structure Occupied Extends XY
   EX.b
   EY.b
 EndStructure
-Structure Tile
-  X.a
-  Y.a
+Structure MPos Extends Occupied
+  Rot.a
+EndStructure
+Structure Tile Extends XY
   InitX.a
   InitY.a
   NowX.b
@@ -65,10 +61,6 @@ Structure Tile
   DragRot.a
   RPosition.a
   List Position.MPos()
-EndStructure
-Structure XY
-  X.a
-  Y.a
 EndStructure
 Structure Task
   Difficulty.a
@@ -87,9 +79,9 @@ Structure Task
   ID.l
 EndStructure
 
-Global SaveFile$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\"+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1
-If Not FileSize(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")=-2
-  CreateDirectory(GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian\")
+Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1
+If Not FileSize(SaveDir$)=-2
+  CreateDirectory(SaveDir$)
 EndIf
 
 Procedure AddPathRoundBox(x.d,y.d,w.d,h.d,radius.d,flags=#PB_Path_Default)
