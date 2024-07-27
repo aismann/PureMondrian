@@ -1,0 +1,27 @@
+<dialogs>
+
+	<window id='#PB_Any' name='Settings_DE' text='Einstellungen' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
+		<vbox>
+			<checkbox id='#Gadget_SharpCorners' text='Keine abgerundeten Ecken'/>
+			<checkbox id='#Gadget_NoGradient' text='Kein Farbverlauf'/>
+			<hbox expand='item:2'>
+				<button id='#Gadget_Cancel' text=' Abbrechen '/>
+				<empty/>
+				<button id='#Gadget_Save' text=' Speichern '/>
+			</hbox>
+		</vbox>
+	</window>
+
+	<window id='#PB_Any' name='Settings_EN' text='Settings' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
+		<vbox>
+			<checkbox id='#Gadget_SharpCorners' text='No sharp corners'/>
+			<checkbox id='#Gadget_NoGradient' text='No gradient'/>
+			<hbox expand='item:2'>
+				<button id='#Gadget_Cancel' text=' Cancel '/>
+				<empty/>
+				<button id='#Gadget_Save' text=' Save '/>
+			</hbox>
+		</vbox>
+	</window>
+
+</dialogs>
