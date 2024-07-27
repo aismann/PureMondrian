@@ -1,18 +1,23 @@
-;PureMondrian 1.4.2 by Jac de Lad
+;PureMondrian 1.5.0 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
 
-Enumeration Window
+Runtime Enumeration Windows
   #MainWindow
+  #SettingsWindow
 EndEnumeration
-Enumeration Gadget
+Runtime Enumeration Gadgets
   #Canvas
   #CanvasTools
   #List
   #RandomButton
   #InfoButton
   #Progress
+  #Gadget_Cancel
+  #Gadget_Save
+  #Gadget_NoGradient
+  #Gadget_SharpCorners
 EndEnumeration
 Enumeration Image
   #Image_Rotate
@@ -29,6 +34,8 @@ Enumeration Image
   #Image_Language
   #Image_Control
   #Image_Internet
+  #Image_About
+  #Image_Settings
 EndEnumeration
 Enumeration Menu
   #Menu_DE
@@ -62,7 +69,7 @@ Structure Tile Extends XY
   RPosition.a
   List Position.MPos()
 EndStructure
-Structure Task
+Structure Puzzle
   Difficulty.a
   Tile1X.a
   Tile1Y.a
@@ -78,15 +85,33 @@ Structure Task
   BestTime.l
   ID.l
 EndStructure
+Structure Settings
+  Language.a
+  SharpCorners.a
+  NoGradient.a
+EndStructure
 
-Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",Dim Field.a(7,7),NewList Tiles.Tile(),NewList PositionMatrix.MPos(),Thread.i,NewList Tasks.Task(),*Task.Task,Background.l,Language.a=1,DragTile.b=-1,MX.w,MY.w,X.w,Y.w,Solved.a=#True,NoDrop.a,Tool.a,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,Timer.a,InitTimer.q,EndTimer.q,VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality),PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality),PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality),BestTime.l,SolveMode.a,Progress.a,Dim PProgress.w(3),Dim TCount.w(3),Difficulty.a,ProgButton.b=-1,Button.l,DarkTheme.a
+Global.i Thread,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread
+Global.l Background,BestTime,Button
+Global.a Language=1,Solved=#True,NoDrop,Tool,Timer,SolveMode,Progress,DarkTheme,Difficulty
+Global.b DragTile=-1,ProgButton=-1
+Global.w MX,MY,X,Y
+Global.q InitTimer,EndTimer
+Global Dim PProgress.w(3),Dim TCount.w(3),Dim Field.a(7,7)
+Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",SettingsFile$=SaveDir$+"PureMondrian.cfg"
+Global.Puzzle *Puzzle
+Global.Settings Settings
+Global NewList Tiles.Tile(),NewList PositionMatrix.MPos(),NewList Puzzles.Puzzle()
 Global NewMap Color.l()
+Global.i VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality)
+Global.i PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality)
+Global.i PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality)
 If Not FileSize(SaveDir$)=-2
   CreateDirectory(SaveDir$)
 EndIf
 
 Procedure AddPathRoundBox(x.d,y.d,w.d,h.d,radius.d,flags=#PB_Path_Default)
-  If Solved
+  If Solved Or Settings\SharpCorners
     AddPathBox(x,y,w,h,#PB_Path_Relative)
   Else
     MovePathCursor(x+radius,y,flags)
@@ -113,7 +138,7 @@ Procedure Draw(Mode)
       MovePathCursor(40, 40*X-1)
       AddPathLine(320, 0, #PB_Path_Relative)
     Next
-    VectorSourceColor(RGBA(32,32,32,255))
+    VectorSourceColor(Color("Text"))
     DotPath(1, 3)
   EndIf
   ForEach Tiles()
@@ -140,9 +165,17 @@ Procedure Draw(Mode)
         EndIf
       EndIf
     EndIf
-    VectorSourceLinearGradient(PathBoundsX(), PathBoundsY(),PathBoundsX(), PathBoundsY() + PathBoundsHeight())
-    VectorSourceGradientColor(RGBA(255,255,255,255), 0)
-    VectorSourceGradientColor(Tiles()\Color, 1)
+    If Settings\NoGradient
+      VectorSourceColor(Tiles()\Color)
+    Else
+      VectorSourceLinearGradient(PathBoundsX(), PathBoundsY(),PathBoundsX(), PathBoundsY() + PathBoundsHeight())
+      If DarkTheme
+        VectorSourceGradientColor(#Black|$FF000000, 0)
+      Else
+        VectorSourceGradientColor(#White|$FF000000, 0)
+      EndIf
+      VectorSourceGradientColor(Tiles()\Color, 1)
+    EndIf
     
     FillPath(#PB_Path_Preserve)
     VectorSourceColor(RGBA(64,64,64,255))
@@ -185,7 +218,7 @@ Procedure Draw(Mode)
       
     EndIf
     
-    AddPathRoundBox(X,Y,W,H, 8)
+    AddPathRoundBox(X,Y,W,H,8)
     If NoDrop
       VectorSourceColor(RGBA(128,128,128,128))
     EndIf
@@ -319,34 +352,11 @@ Procedure Animation(Anim)
   EndIf
 EndProcedure
 
-;{ Create Tiles
-Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor,MyFixed=#False)
-  AddElement(Tiles())
-  Tiles()\X=MyX
-  Tiles()\Y=MyY
-  Tiles()\InitX=MyInitX
-  Tiles()\InitY=MyInitY
-  Tiles()\Color=RGBA(Red(MyColor),Green(MyColor),Blue(MyColor),255)
-  Tiles()\Fixed=MyFixed
-EndMacro
-CreateTile(1,1,0,0,RGB(64,64,64),#True)
-CreateTile(2,1,0,0,RGB(64,64,64),#True)
-CreateTile(3,1,0,0,RGB(64,64,64),#True)
-CreateTile(4,3,6,3,#Blue)
-CreateTile(3,3,3,3,#Cyan)
-CreateTile(5,2,6,1,#Red)
-CreateTile(4,2,2,1,#Cyan)
-CreateTile(3,2,0,3,#Red)
-CreateTile(2,2,0,1,#Cyan)
-CreateTile(5,1,0,0,#Yellow)
-CreateTile(4,1,5,0,#Yellow)
-;}
-
 Procedure Solve()
   DisableDebugger
   Protected X.a,Y.a,*Pos.Tile,*MPos.MPos,NewList Locked.XY(),Position.w,Del.a,NewList Occupied.Tile(),Dim Field.a(7,7),Done.a,error.a
   
-  ;Teilematrix erstellen
+  ;Create tile matrix
   ForEach Tiles()
     If Not Tiles()\Fixed
       ClearList(Tiles()\Position())
@@ -370,7 +380,7 @@ Procedure Solve()
     EndIf
   Next
   
-  ;Gesperrte Positionen ermitteln
+  ;Determine locked positions
   ForEach Tiles()
     If Tiles()\Fixed
       ForEach Tiles()\Position()
@@ -399,7 +409,7 @@ Procedure Solve()
     EndIf
   Next
   
-  ;Teilematrix ausdünnen
+  ;Thin out tile matrix
   ForEach Tiles()
     If Not Tiles()\Fixed
       Position=ListSize(Tiles()\Position())-1
@@ -435,12 +445,12 @@ Procedure Solve()
     EndIf
   Next
   
-  ;Brute-Force-Placement-Attacke
+  ;Brute force placement ttack
   Protected Count.q
   
   Repeat
     
-    ;Teile prüfen
+    ;Check tile
     FreeArray(Field())
     Dim Field(7,7)
     Done=#True
@@ -500,15 +510,15 @@ EndProcedure
 Procedure LoadList(Difficulty)
   Protected Image.i
   ClearGadgetItems(#List)
-  ForEach Tasks()
-    If Tasks()\Difficulty=Difficulty
-      If Tasks()\State
-        Image=Tasks()\DoneImage
+  ForEach Puzzles()
+    If Puzzles()\Difficulty=Difficulty
+      If Puzzles()\State
+        Image=Puzzles()\DoneImage
       Else
-        Image=Tasks()\Image
+        Image=Puzzles()\Image
       EndIf
-      AddGadgetItem(#List,-1,"Puzzle "+Str(ListIndex(Tasks())+1),ImageID(Image))
-      SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Tasks())
+      AddGadgetItem(#List,-1,"Puzzle "+Str(ListIndex(Puzzles())+1),ImageID(Image))
+      SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Puzzles())
     EndIf
   Next
   StartVectorDrawing(CanvasVectorOutput(#Canvas))
@@ -517,71 +527,69 @@ Procedure LoadList(Difficulty)
   StopVectorDrawing()
   DrawTools()
 EndProcedure
-
 Macro DrawMiniTiles()
   Box(2,2,8*Size,8*Size,Background)
-  Box(2+Tasks()\Tile1X*Size,2+Tasks()\Tile1Y*Size,Size,Size,Color("Text"))
-  If Tasks()\Tile2R
-    Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size,Size*2,Color("Text"))
+  Box(2+Puzzles()\Tile1X*Size,2+Puzzles()\Tile1Y*Size,Size,Size,Color("Text"))
+  If Puzzles()\Tile2R
+    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size,Size*2,Color("Text"))
   Else
-    Box(2+Tasks()\Tile2X*Size,2+Tasks()\Tile2Y*Size,Size*2,Size,Color("Text"))
+    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size*2,Size,Color("Text"))
   EndIf
-  If Tasks()\Tile3R
-    Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size,Size*3,Color("Text"))
+  If Puzzles()\Tile3R
+    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size,Size*3,Color("Text"))
   Else
-    Box(2+Tasks()\Tile3X*Size,2+Tasks()\Tile3Y*Size,Size*3,Size,Color("Text"))
+    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size*3,Size,Color("Text"))
   EndIf
 EndMacro
-Procedure LoadTasks()
-  Protected *Mem=?Tasks,Size.a=4
+Procedure LoadPuzzles()
+  Protected *Mem=?Puzzles,Size.a=4,Puzzle$
   Repeat
-    AddElement(Tasks())
-    Tasks()\Difficulty=PeekA(*Mem)
-    Tasks()\Tile1X=PeekA(*Mem+1)
-    Tasks()\Tile1Y=PeekA(*Mem+2)
-    Tasks()\Tile2X=PeekA(*Mem+3)
-    Tasks()\Tile2Y=PeekA(*Mem+4)
-    Tasks()\Tile2R=PeekA(*Mem+5)
-    Tasks()\Tile3X=PeekA(*Mem+6)
-    Tasks()\Tile3Y=PeekA(*Mem+7)
-    Tasks()\Tile3R=PeekA(*Mem+8)
-    Tasks()\ID=Val(Str(Tasks()\Difficulty)+Str(Tasks()\Tile1X)+Str(Tasks()\Tile1Y)+Str(Tasks()\Tile2X)+Str(Tasks()\Tile2Y)+Str(Tasks()\Tile2R)+Str(Tasks()\Tile3X)+Str(Tasks()\Tile3Y)+Str(Tasks()\Tile3R))
-    TCount(Tasks()\Difficulty)=TCount(Tasks()\Difficulty)+1
-    Tasks()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,Color("Border"))
-    StartDrawing(ImageOutput(Tasks()\Image))
+    AddElement(Puzzles())
+    Puzzles()\ID=PeekL(*Mem);Val(Str(Puzzles()\Difficulty)+Str(Puzzles()\Tile1X)+Str(Puzzles()\Tile1Y)+Str(Puzzles()\Tile2X)+Str(Puzzles()\Tile2Y)+Str(Puzzles()\Tile2R)+Str(Puzzles()\Tile3X)+Str(Puzzles()\Tile3Y)+Str(Puzzles()\Tile3R))
+    Puzzle$=RSet(Str(Puzzles()\ID),9,"0")
+    Puzzles()\Difficulty=Val(Mid(Puzzle$,1,1))
+    Puzzles()\Tile1X=Val(Mid(Puzzle$,2,1))
+    Puzzles()\Tile1Y=Val(Mid(Puzzle$,3,1))
+    Puzzles()\Tile2X=Val(Mid(Puzzle$,4,1))
+    Puzzles()\Tile2Y=Val(Mid(Puzzle$,5,1))
+    Puzzles()\Tile2R=Val(Mid(Puzzle$,6,1))
+    Puzzles()\Tile3X=Val(Mid(Puzzle$,7,1))
+    Puzzles()\Tile3Y=Val(Mid(Puzzle$,8,1))
+    Puzzles()\Tile3R=Val(Mid(Puzzle$,9,1))
+    TCount(Puzzles()\Difficulty)=TCount(Puzzles()\Difficulty)+1
+    Puzzles()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,Color("Border"))
+    StartDrawing(ImageOutput(Puzzles()\Image))
     DrawMiniTiles()
     StopDrawing()
-    Tasks()\DoneImage=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,#Green)
-    StartDrawing(ImageOutput(Tasks()\DoneImage))
+    Puzzles()\DoneImage=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,#Green)
+    StartDrawing(ImageOutput(Puzzles()\DoneImage))
     DrawMiniTiles()
     DrawingMode(#PB_2DDrawing_AlphaBlend)
     DrawImage(ImageID(#Image_Done),0,0)
     StopDrawing()
-    *Mem+9
-  Until *Mem>=?TasksEnd
+    *Mem+4
+  Until *Mem>=?PuzzlesEnd
 EndProcedure
-
-Procedure LoadTask(Task)
+Procedure LoadPuzzle(*Puzzle.Puzzle)
   Protected X.a
   Solved=#False
   ForEach Tiles()
     ClearList(Tiles()\Position())
   Next
-  ChangeCurrentElement(Tasks(),Task)
   FirstElement(Tiles())
   AddElement(Tiles()\Position())
-  Tiles()\Position()\X=Tasks()\Tile1X
-  Tiles()\Position()\Y=Tasks()\Tile1Y
+  Tiles()\Position()\X=*Puzzle\Tile1X
+  Tiles()\Position()\Y=*Puzzle\Tile1Y
   NextElement(Tiles())
   AddElement(Tiles()\Position())
-  Tiles()\Position()\X=Tasks()\Tile2X
-  Tiles()\Position()\Y=Tasks()\Tile2Y
-  Tiles()\Position()\Rot=Tasks()\Tile2R
+  Tiles()\Position()\X=*Puzzle\Tile2X
+  Tiles()\Position()\Y=*Puzzle\Tile2Y
+  Tiles()\Position()\Rot=*Puzzle\Tile2R
   NextElement(Tiles())
   AddElement(Tiles()\Position())
-  Tiles()\Position()\X=Tasks()\Tile3X
-  Tiles()\Position()\Y=Tasks()\Tile3Y
-  Tiles()\Position()\Rot=Tasks()\Tile3R
+  Tiles()\Position()\X=*Puzzle\Tile3X
+  Tiles()\Position()\Y=*Puzzle\Tile3Y
+  Tiles()\Position()\Rot=*Puzzle\Tile3R
   FreeArray(Field())
   Dim Field(7,7)
   ForEach Tiles()
@@ -612,16 +620,15 @@ Procedure LoadTask(Task)
     EndIf
   Next
 EndProcedure
-
-Procedure LoadNextTask()
-  Protected Done.a,X.w,*Task.Task
-  ForEach Tasks()
-    If Tasks()\State=#False
-      *Task=@Tasks()
-      LoadList(Tasks()\Difficulty)
-      Difficulty=*Task\Difficulty
+Procedure LoadNextPuzzle()
+  Protected Done.a,X.w,*Puzzle.Puzzle
+  ForEach Puzzles()
+    If Puzzles()\State=#False
+      *Puzzle=@Puzzles()
+      LoadList(Puzzles()\Difficulty)
+      Difficulty=*Puzzle\Difficulty
       For X=0 To CountGadgetItems(#List)-1
-        If GetGadgetItemData(#List,X)=*Task
+        If GetGadgetItemData(#List,X)=*Puzzle
           SetGadgetState(#List,X)
           PostEvent(#PB_Event_Gadget,#MainWindow,#List,#PB_EventType_Change)
           Break
@@ -776,16 +783,23 @@ Procedure SelectNextTile(Direction.a)
 EndProcedure
 
 Procedure LoadProgress()
+  Protected File,ID.l
+  If FileSize(SettingsFile$)>=2
+    File=ReadFile(#PB_Any,SettingsFile$)
+    Settings\NoGradient=ReadByte(File)
+    Settings\SharpCorners=ReadByte(File)
+    CloseFile(File)
+  EndIf
   If FileSize(SaveFile$)>=0
-    Protected File=ReadFile(#PB_Any,SaveFile$),ID.l
+    File=ReadFile(#PB_Any,SaveFile$)
     If File
       Language=ReadByte(File)
       While Not Eof(File)
         ID=ReadLong(File)
-        ForEach Tasks()
-          If Tasks()\ID=ID
-            Tasks()\State=ReadByte(File)
-            Tasks()\BestTime=ReadLong(File)
+        ForEach Puzzles()
+          If Puzzles()\ID=ID
+            Puzzles()\State=ReadByte(File)
+            Puzzles()\BestTime=ReadLong(File)
             Break
           EndIf
         Next
@@ -795,14 +809,20 @@ Procedure LoadProgress()
   EndIf
 EndProcedure
 Procedure SaveProgress()
-  Protected File=CreateFile(#PB_Any,SaveFile$)
+  Protected File=CreateFile(#PB_Any,SettingsFile$)
+  If File
+    WriteByte(File,Settings\NoGradient)
+    WriteByte(File,Settings\SharpCorners)
+    CloseFile(File)
+  EndIf
+  File=CreateFile(#PB_Any,SaveFile$)
   If File
     WriteByte(File,1-Language)
-    ForEach Tasks()
-      If Tasks()\State
-        WriteLong(File,Tasks()\ID)
-        WriteByte(File,Tasks()\State)
-        WriteLong(File,Tasks()\BestTime)
+    ForEach Puzzles()
+      If Puzzles()\State
+        WriteLong(File,Puzzles()\ID)
+        WriteByte(File,Puzzles()\State)
+        WriteLong(File,Puzzles()\BestTime)
       EndIf
     Next
     CloseFile(File)
@@ -820,12 +840,12 @@ Procedure Progress()
   PProgress(1)=0
   PProgress(2)=0
   PProgress(3)=0
-  ForEach Tasks()
-    If Tasks()\State
-      PProgress(Tasks()\Difficulty)=PProgress(Tasks()\Difficulty)+1
+  ForEach Puzzles()
+    If Puzzles()\State
+      PProgress(Puzzles()\Difficulty)=PProgress(Puzzles()\Difficulty)+1
     EndIf
   Next
-  Progress=Round(100*(PProgress(0)+PProgress(1)+PProgress(2)+PProgress(3))/ListSize(Tasks()),#PB_Round_Down)
+  Progress=Round(100*(PProgress(0)+PProgress(1)+PProgress(2)+PProgress(3))/ListSize(Puzzles()),#PB_Round_Down)
 EndProcedure
 Procedure DrawProgress()
   Protected Text$=Str(Progress)+"%",Count.a,Diff$,MX.l,MY.l
@@ -883,8 +903,56 @@ Procedure DrawProgress()
   StopDrawing()
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.4.2",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
-;{ Set theme colors
+Procedure Settings()
+  ParseXML(0,PeekS(?Windows,?WindowsEnd-?Windows,#PB_UTF8))
+  CreateDialog(0)
+  If Language
+    OpenXMLDialog(0,0,"Settings_EN",0,0,0,0,WindowID(#MainWindow))
+  Else
+    OpenXMLDialog(0,0,"Settings_DE",0,0,0,0,WindowID(#MainWindow))
+  EndIf
+  DisableWindow(#MainWindow,#True)
+  SetGadgetState(#Gadget_NoGradient,Settings\NoGradient&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_SharpCorners,Settings\SharpCorners&#PB_Checkbox_Checked)
+  Repeat
+    Select WaitWindowEvent()
+      Case #PB_Event_CloseWindow
+        Break
+      Case #PB_Event_Gadget
+        Select EventType()
+          Case #PB_EventType_LeftClick
+            Select EventGadget()
+              Case #Gadget_Cancel
+                Break
+              Case #Gadget_Save
+                Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
+                Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
+                SaveProgress()
+                Draw(0)
+                Break
+            EndSelect
+        EndSelect
+    EndSelect
+  ForEver
+  DisableWindow(#MainWindow,#False)
+  SetActiveWindow(#MainWindow)
+  FreeDialog(0)
+EndProcedure
+
+OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.5.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+
+;{ Tile creation macro
+Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor,MyFixed=#False)
+  AddElement(Tiles())
+  Tiles()\X=MyX
+  Tiles()\Y=MyY
+  Tiles()\InitX=MyInitX
+  Tiles()\InitY=MyInitY
+  Tiles()\Color=RGBA(Red(MyColor),Green(MyColor),Blue(MyColor),255)
+  Tiles()\Fixed=MyFixed
+EndMacro
+;}
+;{ Set theme colors and create fixed tiles
 CompilerIf #PB_Compiler_OS=#PB_OS_Windows
   Background.l = GetSysColor_(#COLOR_BTNFACE)
 CompilerElse
@@ -896,10 +964,27 @@ Background=RGBA(Red(Background),Green(Background),Blue(Background),255)
 If 0.299*Red(Background)+0.587*Green(Background)+0.114*Blue(Background)<=186
   Color("Text")=#White|$FF000000
   Color("Border")=#Cyan|$FF000000
+  CreateTile(1,1,0,0,#White,#True)
+  CreateTile(2,1,0,0,#White,#True)
+  CreateTile(3,1,0,0,#White,#True)
+  DarkTheme=#True
 Else
   Color("Text")=#Black|$FF000000
   Color("Border")=#Blue|$FF000000
+  CreateTile(1,1,0,0,RGB(64,64,64),#True)
+  CreateTile(2,1,0,0,RGB(64,64,64),#True)
+  CreateTile(3,1,0,0,RGB(64,64,64),#True)
 EndIf
+;}
+;{ Create remaining tiles
+CreateTile(4,3,6,3,#Blue)
+CreateTile(3,3,3,3,#Cyan)
+CreateTile(5,2,6,1,#Red)
+CreateTile(4,2,2,1,#Cyan)
+CreateTile(3,2,0,3,#Red)
+CreateTile(2,2,0,1,#Cyan)
+CreateTile(5,1,0,0,#Yellow)
+CreateTile(4,1,5,0,#Yellow)
 ;}
 
 SetGadgetFont(#PB_Default,FontID(LoadFont(#PB_Any,"Verdana",10,#PB_Font_HighQuality)))
@@ -915,7 +1000,9 @@ ListIconGadget(#List,400,40,380,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelectio
 SetGadgetAttribute(#List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
 GadgetToolTip(#InfoButton,"Information")
 GadgetToolTip(#RandomButton,"Zufälliges Puzzle")
+CatchImage(#Image_About,?I_About)
 CatchImage(#Image_Language,?I_Language)
+CatchImage(#Image_Settings,?I_Settings)
 CatchImage(#Image_Control,?I_Control)
 CatchImage(#Image_Internet,?I_Internet)
 CatchImage(#Image_Lock,?I_Lock)
@@ -930,23 +1017,29 @@ BlackWhite(#Image_ARotateBW,?I_ARotate)
 BlackWhite(#Image_SolveBW,?I_Magic)
 BlackWhite(#Image_ResetBW,?I_Refresh)
 DrawTools()
-LoadTasks()
+LoadPuzzles()
 LoadProgress()
-LoadNextTask()
+LoadNextPuzzle()
 Progress()
 DrawProgress()
 
+;{ Create menus
 CreatePopupImageMenu(#Menu_DE)
-MenuItem(1,"English",ImageID(#Image_Language))
+MenuItem(1,"Switch to English",ImageID(#Image_Language))
 MenuItem(2,"Wie man spielt",ImageID(#Image_Control))
+MenuItem(3,"Einstellungen",ImageID(#Image_Settings))
 MenuBar()
-MenuItem(3,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
+MenuItem(4,"Über dieses Spiel",ImageID(#Image_About))
+MenuItem(5,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
 
 CreatePopupImageMenu(#Menu_EN)
-MenuItem(1,"Deutsch",ImageID(#Image_Language))
+MenuItem(1,"Zu Deutsch wechseln",ImageID(#Image_Language))
 MenuItem(2,"How to play",ImageID(#Image_Control))
+MenuItem(3,"Settings",ImageID(#Image_Settings))
 MenuBar()
-MenuItem(3,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
+MenuItem(4,"About this game",ImageID(#Image_About))
+MenuItem(5,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
+;}
 
 AddWindowTimer(#MainWindow,1,100)
 AddKeyboardShortcut(#MainWindow,458859,999)
@@ -969,11 +1062,19 @@ Repeat
           DrawProgress()
         Case 2
           If Language
-            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nHow to play:\r\nSelect a puzzle. Drag and drop the tiles to build a 8x8-square; the black pieces are locked. While moving a part, rotate it with the right mouse button. Remove a placed tile with a right click on it.\r\n\r\nIn case of despair, use the solve button (...which is initially hidden).",#PB_MessageRequester_Info)
+            MessageRequester("Information",~"How to play:\r\nSelect a puzzle. Drag and drop the tiles to build a 8x8-square; the black pieces are locked. While moving a part, rotate it with the right mouse button. Remove a placed tile with a right click on it.\r\n\r\nIn case of despair, use the solve button (...which is initially hidden).",#PB_MessageRequester_Info)
           Else
-            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nSpielanleitung:\r\nWähle ein Puzzle. Ziehe die Teile auf das 8x8-Quadrat; die schwarzen Teile sind vorgegeben. Während des Ziehens kann ein Teil mit der rechten Maustaste gedreht werden. Klicken sie mit rechts auf ein bereits platziertes Teil, um es zu entfernen.\r\n\r\nSollten sie verzweifeln, nutzen sie den Lösungsbutton (...welcher am Anfang verborgen ist).",#PB_MessageRequester_Info)
+            MessageRequester("Information",~"Spielanleitung:\r\nWähle ein Puzzle. Ziehe die Teile auf das 8x8-Quadrat; die schwarzen Teile sind vorgegeben. Während des Ziehens kann ein Teil mit der rechten Maustaste gedreht werden. Klicken sie mit rechts auf ein bereits platziertes Teil, um es zu entfernen.\r\n\r\nSollten sie verzweifeln, nutzen sie den Lösungsbutton (...welcher am Anfang verborgen ist).",#PB_MessageRequester_Info)
           EndIf
         Case 3
+          Settings()
+        Case 4
+          If Language
+            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nWith the support and brought in suggestions from Mr.L, moulder61, infratec, AZJIO, Axolotl, and MindPhazer. You can get the full source and compile your own custom executable with PureBasic on https://github.com/jacdelad/PureMondrian. Just don't sell it and refer to the original source!",#PB_MessageRequester_Info)
+          Else
+            MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nMit der Unterstützung und umgesetzten Vorschlägen von Mr.L, moulder61, infratec, AZJIO, Axolotl und MindPhazer. Sie können den kompletten Quellcode auf https://github.com/jacdelad/PureMondrian herunterladen und ihre eigene, angepasste App mit PureBasic erzeugen. Aber nicht zum Verkaufen und immer eine Referenz zur Quelle hinzufügen!",#PB_MessageRequester_Info)
+          EndIf
+        Case 5
           CompilerSelect #PB_Compiler_OS
             CompilerCase #PB_OS_Windows
               RunProgram("https://www.purebasic.fr/english/viewtopic.php?t=84627")
@@ -1106,14 +1207,14 @@ Repeat
                   EndTimer=ElapsedMilliseconds()
                   Solved=#True
                   Draw(#False)
-                  *Task=GetGadgetItemData(#List,GetGadgetState(#List))
-                  *Task\State=#True
-                  SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Task\DoneImage))
+                  *Puzzle=GetGadgetItemData(#List,GetGadgetState(#List))
+                  *Puzzle\State=#True
+                  SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Puzzle\DoneImage))
                   Timer=2
-                  If EndTimer-InitTimer<*Task\BestTime Or *Task\BestTime=0
-                    *Task\BestTime=EndTimer-InitTimer
+                  If EndTimer-InitTimer<*Puzzle\BestTime Or *Puzzle\BestTime=0
+                    *Puzzle\BestTime=EndTimer-InitTimer
                     BestTime=EndTimer-InitTimer
-                    *Task\BestTime=BestTime
+                    *Puzzle\BestTime=BestTime
                     Progress()
                   EndIf
                   SolveMode=#False
@@ -1197,11 +1298,11 @@ Repeat
                 Solved=#True
                 Timer=0
               Else
-                *Task=GetGadgetItemData(#List,GetGadgetState(#List))
-                LoadTask(*Task)
+                *Puzzle=GetGadgetItemData(#List,GetGadgetState(#List))
+                LoadPuzzle(*Puzzle)
                 Draw(#False)
                 InitTimer=0
-                BestTime=*Task\BestTime
+                BestTime=*Puzzle\BestTime
                 Timer=1
               EndIf
               SolveMode=#False
@@ -1224,188 +1325,28 @@ Repeat
 ForEver
 
 DataSection;Predefined puzzles
-  Tasks:
+  Puzzles:
   ;Easy
-  Data.a 0,0,1,0,4,0,5,3,1
-  Data.a 0,2,1,3,6,0,0,2,0
-  Data.a 0,3,5,2,4,1,0,2,0
-  Data.a 0,1,0,6,7,0,5,2,0
-  Data.a 0,1,3,4,2,0,6,2,1
-  Data.a 0,1,7,1,6,0,0,2,0
-  Data.a 0,0,0,1,3,0,1,5,0
-  Data.a 0,7,7,1,5,0,1,2,1
-  Data.a 0,2,3,3,2,0,4,4,0
-  Data.a 0,6,0,4,4,0,5,5,1
-  Data.a 0,0,0,2,0,1,5,3,1
-  Data.a 0,0,7,0,5,0,3,0,1
-  Data.a 0,2,1,7,5,1,7,0,1
-  Data.a 0,6,3,1,2,1,0,5,1
-  Data.a 0,2,4,6,2,0,5,0,0
-  Data.a 0,3,6,4,1,1,7,0,1
-  Data.a 0,7,4,4,4,0,5,7,0
-  Data.a 0,3,2,1,3,1,4,7,0
-  Data.a 0,3,5,4,5,1,0,1,0
-  Data.a 0,7,7,2,4,0,3,7,0
-  Data.a 0,7,3,4,3,0,2,0,0
-  Data.a 0,1,2,5,4,0,2,0,0
-  Data.a 0,5,4,0,2,0,2,1,0
-  Data.a 0,6,3,1,3,1,0,2,0
-  Data.a 0,7,0,0,1,0,4,5,0
-  Data.a 0,4,6,3,4,0,5,0,1
-  Data.a 0,1,0,6,7,0,2,2,0
-  Data.a 0,1,5,0,2,0,5,4,0
-  Data.a 0,2,3,5,1,1,6,1,1
-  Data.a 0,2,4,4,5,0,4,1,1
-  Data.a 0,1,4,5,3,0,2,2,0
-  Data.a 0,3,6,4,2,1,3,5,0
-  Data.a 0,5,2,1,3,1,1,2,0
-  Data.a 0,1,4,3,3,0,3,5,0
-  Data.a 0,6,0,4,5,0,4,1,0
-  Data.a 0,3,7,2,4,1,6,4,1
-  Data.a 0,1,5,1,2,1,5,3,0
-  Data.a 0,0,1,5,4,1,2,2,1
-  Data.a 0,2,2,4,2,1,1,0,1
-  Data.a 0,4,1,6,6,0,4,0,0
-  Data.a 0,3,7,5,6,0,2,4,0
-  Data.a 0,4,1,4,3,1,5,5,0
-  Data.a 0,2,4,1,1,0,2,5,0
-  Data.a 0,5,0,2,5,1,3,1,0
+  Data.l $000FE093,$0145ED94,$0219BC3C,$00A2D1B8,$00CCC84D,$0105D754,$0001FC66,$049937A9,$0163D778,$039A3FE7,$0003133B
+  Data.l $006B943D,$014BE795,$03C3269B,$0177ADD4,$022B9935,$046FDF7A,$01EA498E,$021CF082,$049A9832,$046074B8,$00BF5928
+  Data.l $03384872,$03C34D8C,$042C4652,$02C31995,$00A2D08C,$00E531FC,$0166C23B,$0175156B,$00DDB6AC,$022BBEE6,$031B7530
+  Data.l $00DAA9EE,$039A666A,$02384329,$00E6BC7A,$00178465,$01561E6D,$027BAFF0,$023D1FB0,$027831FE,$016FE4AA,$02FEC62E
   ;Medium
-  Data.a 1,4,2,5,3,1,1,2,0
-  Data.a 1,2,1,3,1,1,0,5,1
-  Data.a 1,3,2,7,5,1,7,0,1
-  Data.a 1,6,4,2,3,0,0,0,0
-  Data.a 1,2,7,4,3,0,7,4,1
-  Data.a 1,7,2,7,6,1,4,5,1
-  Data.a 1,3,3,0,7,0,2,1,1
-  Data.a 1,5,5,7,3,1,4,1,1
-  Data.a 1,4,4,1,7,0,3,2,1
-  Data.a 1,3,5,7,4,1,0,4,0
-  Data.a 1,7,3,2,4,0,3,5,0
-  Data.a 1,2,5,7,5,1,3,3,0
-  Data.a 1,4,2,5,6,1,2,0,1
-  Data.a 1,2,3,7,2,1,4,2,1
-  Data.a 1,5,0,0,2,0,0,3,0
-  Data.a 1,3,6,0,3,1,5,5,0
-  Data.a 1,5,0,0,4,1,3,3,1
-  Data.a 1,3,4,4,2,1,2,4,1
-  Data.a 1,1,3,3,0,1,5,3,0
-  Data.a 1,3,0,0,2,0,5,3,0
-  Data.a 1,4,4,3,1,0,0,1,0
-  Data.a 1,5,5,3,1,0,0,1,0
-  Data.a 1,6,3,3,7,0,4,2,0
-  Data.a 1,5,1,7,4,1,4,1,1
-  Data.a 1,3,3,0,3,0,7,3,1
-  Data.a 1,5,7,2,6,1,3,2,1
-  Data.a 1,3,5,1,0,0,1,4,0
-  Data.a 1,0,5,2,0,1,7,1,1
-  Data.a 1,3,1,0,6,1,1,7,0
-  Data.a 1,4,2,6,3,1,3,3,1
-  Data.a 1,1,2,1,3,1,3,5,0
-  Data.a 1,7,3,4,0,1,5,4,0
-  Data.a 1,2,4,2,1,0,4,5,1
-  Data.a 1,7,5,2,2,0,4,3,0
-  Data.a 1,4,2,2,6,1,5,4,1
-  Data.a 1,2,4,3,6,1,0,2,0
-  Data.a 1,1,2,1,3,1,5,0,1
-  Data.a 1,0,4,4,1,0,4,5,1
-  Data.a 1,2,2,3,2,0,1,5,1
-  Data.a 1,5,3,2,4,1,4,3,1
-  Data.a 1,3,4,5,6,1,2,3,0
-  Data.a 1,5,3,2,0,0,5,5,1
-  Data.a 1,0,0,2,6,1,7,4,1
-  Data.a 1,4,3,2,6,1,2,4,0
+  Data.l $087EDA30,$073B0F4B,$07E9A155,$09C9F370,$07987055,$0A4C216B,$07EE7D83,$094845D3,$0897DD51,$08173E70,$0A53701E
+  Data.l $077ED022,$087F4FB1,$075FD6CD,$08F11FBE,$081BAD3E,$08F172F3,$08031AF9,$06C0D81A,$07BFF4B2,$0899FEFA,$0941D7BA
+  Data.l $09BCD5B4,$090B63E3,$07EDE34B,$095F9E09,$080D76EC,$0645402F,$07CFD5B2,$088061A3,$06AEFD16,$0A55E5C4,$07674D13
+  Data.l $0A71A6CE,$087ABD25,$0769993C,$06AEFDAD,$06392D53,$074A7517,$09224757,$08053DCE,$0921A7A7,$05F9DF6D,$0889FE38
   ;Hard
-  Data.a 2,3,1,5,4,1,0,5,1
-  Data.a 2,5,5,6,3,0,3,4,0
-  Data.a 2,4,3,7,4,1,0,2,0
-  Data.a 2,6,3,2,3,0,7,3,1
-  Data.a 2,4,3,0,4,0,0,0,0
-  Data.a 2,6,3,2,2,0,7,3,1
-  Data.a 2,0,0,7,4,1,3,5,1
-  Data.a 2,5,0,5,2,1,2,0,0
-  Data.a 2,4,5,7,2,1,0,2,1
-  Data.a 2,3,3,4,6,1,3,0,0
-  Data.a 2,2,4,3,2,1,0,3,0
-  Data.a 2,4,2,2,0,0,3,5,1
-  Data.a 2,1,4,2,7,0,0,2,1
-  Data.a 2,5,4,2,0,0,0,3,1
-  Data.a 2,6,4,3,6,1,7,2,1
-  Data.a 2,2,2,4,4,1,7,5,1
-  Data.a 2,5,3,0,2,0,2,5,0
-  Data.a 2,2,2,0,4,0,5,3,0
-  Data.a 2,5,4,4,4,1,3,0,1
-  Data.a 2,5,3,3,2,0,0,4,0
-  Data.a 2,6,3,3,4,1,4,4,0
-  Data.a 2,3,4,0,2,1,7,3,1
-  Data.a 2,5,4,3,2,1,2,2,1
-  Data.a 2,2,5,4,3,0,0,0,0
-  Data.a 2,5,3,0,0,1,5,5,0
-  Data.a 2,4,2,5,4,1,0,3,1
-  Data.a 2,2,5,3,7,0,5,5,1
-  Data.a 2,5,5,2,0,0,2,1,1
-  Data.a 2,3,5,6,0,0,3,2,0
-  Data.a 2,3,4,6,3,0,4,4,1
-  Data.a 2,0,7,0,3,1,5,2,1
-  Data.a 2,4,0,4,7,0,5,4,0
-  Data.a 2,4,7,0,6,1,5,3,0
-  Data.a 2,3,5,6,0,0,2,3,0
-  Data.a 2,7,7,3,6,1,4,4,0
-  Data.a 2,6,4,0,3,0,2,7,0
-  Data.a 2,2,1,0,6,1,4,5,1
-  Data.a 2,2,3,7,4,1,0,4,0
-  Data.a 2,3,2,2,4,1,5,5,0
-  Data.a 2,7,0,0,0,0,1,5,0
-  Data.a 2,7,4,6,3,0,3,5,1
-  Data.a 2,4,1,6,4,0,5,3,0
-  Data.a 2,2,7,4,2,0,5,7,0
-  Data.a 2,3,2,0,7,0,0,4,1
+  Data.l $0DCD093B,$0F3C9C04,$0E87315C,$0FB0950B,$0E7C7F00,$0FB06DFB,$0BF711E7,$0EEEA670,$0EA567BD,$0DEA5634,$0D5EDE06
+  Data.l $0E6FAF1F,$0CC58045,$0F26C8DF,$0FC1D6F9,$0D423117,$0F14C85A,$0D3C11D2,$0F2A7755,$0F195B68,$0FB24580,$0DF2E363
+  Data.l $0F28A245,$0D6FC9F0,$0F147F4E,$0E74E1E7,$0D6EE1B7,$0F360BD3,$0E0AF9C0,$0DFC2D29,$0C570CE1,$0E554A0C,$0EB9DC1A
+  Data.l $0E0AF966,$10883320,$0FBCC83E,$0D2D214B,$0D560470,$0DD7B98E,$1017E016,$105E86CF,$0E672452,$0D8E299A,$0DD51B99
   ;Master
-  Data.a 3,5,5,3,0,1,0,7,0
-  Data.a 3,4,2,6,5,0,2,7,0
-  Data.a 3,3,4,5,0,1,7,3,1
-  Data.a 3,4,5,2,0,1,0,5,1
-  Data.a 3,2,3,4,5,0,0,0,0
-  Data.a 3,4,3,0,2,1,5,0,0
-  Data.a 3,3,2,4,2,0,0,0,1
-  Data.a 3,2,6,3,3,1,0,7,0
-  Data.a 3,1,2,3,7,0,0,0,1
-  Data.a 3,5,5,2,6,1,2,0,0
-  Data.a 3,3,4,4,6,1,5,7,0
-  Data.a 3,3,3,4,2,1,2,7,0
-  Data.a 3,5,4,4,3,1,2,0,0
-  Data.a 3,4,2,2,4,0,0,0,1
-  Data.a 3,2,5,0,2,0,7,5,1
-  Data.a 3,5,3,3,4,1,2,0,0
-  Data.a 3,4,4,2,6,1,3,0,0
-  Data.a 3,2,2,4,0,0,5,1,1
-  Data.a 3,2,5,4,3,1,3,0,1
-  Data.a 3,2,4,7,3,1,5,5,0
-  Data.a 3,2,2,0,6,1,5,4,0
-  Data.a 3,2,6,0,3,1,0,7,0
-  Data.a 3,3,5,6,0,0,0,2,0
-  Data.a 3,5,3,3,4,1,5,7,0
-  Data.a 3,2,3,0,6,1,0,0,0
-  Data.a 3,2,4,4,2,0,2,3,0
-  Data.a 3,4,5,5,2,1,2,4,0
-  Data.a 3,2,1,5,6,1,0,0,0
-  Data.a 3,4,2,5,4,1,7,0,1
-  Data.a 3,4,5,4,3,1,2,2,0
-  Data.a 3,5,2,0,4,0,0,5,1
-  Data.a 3,2,2,3,4,0,4,5,1
-  Data.a 3,3,3,7,6,1,3,0,0
-  Data.a 3,4,4,6,7,0,7,2,1
-  Data.a 3,2,3,0,6,1,7,2,1
-  Data.a 3,4,4,6,7,0,7,0,1
-  Data.a 3,5,4,2,5,0,5,3,0
-  Data.a 3,5,1,0,0,1,3,0,0
-  Data.a 3,4,0,2,2,1,3,4,0
-  Data.a 3,2,7,7,2,1,0,0,0
-  Data.a 3,3,2,5,4,1,2,7,0
-  Data.a 3,4,5,3,6,1,5,0,0
-  Data.a 3,3,4,4,7,0,0,2,1
-  Data.a 3,3,2,5,6,1,0,5,0
-  TasksEnd:
+  Data.l $152D76CE,$146C6D9E,$13F01763,$1493599B,$13477490,$147217BC,$13D053A1,$13736ABE,$129E6351,$152CDB10,$13EF7A82
+  Data.l $13DF9AD6,$152030E0,$14662B01,$135F6C4F,$150F8F10,$148502B4,$133770FF,$1365B005,$135B029E,$133244E4,$136ED6DE
+  Data.l $1400D994,$150F9082,$13418508,$13564286,$14983C58,$132AA1A8,$146AC585,$1496DCB4,$14FBB473,$13368663,$13E4CB14
+  Data.l $148B4201,$134187D9,$148B41ED,$151D6F22,$14EBDAD4,$14475D9C,$1388A028,$13D22D56,$1495CC5C,$13EF9B85,$13D27A9A
+  PuzzlesEnd:
 EndDataSection
 DataSection;Icons (all icons are distributed under licenses which allow me to use them for non-commercial projects!)
   
@@ -1426,9 +1367,15 @@ DataSection;Icons (all icons are distributed under licenses which allow me to us
   ;The following icons are used form the icon set "Led Icons": https://www.iconarchive.com/show/led-icons-by-led24.de.html
   I_Complete: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$4144499202000061,$41F02F7062DA7854,$02B8808459EB7BC1,$41A68C03936D0188,$DB6DB6DB3E2F4410,$DB6DB6DAC6DB6DB6,$CF5D49D6BFDB6DB6,$21B6357EC7DE495A,$4C49F89EC22289F2,$1B100D1657DF5BE8,$83D44F28D7F74C8F,$4F287155F5062AA0,$4F88043BE7B64032,$143F40180C48D504,$D6899B89A3F7F563,$6E58D0C273345C86,$A378D5345D52868A,$4C122A6E668A9045,$164C019E9510B04F,$7B150E62423A378A,$B6CD52FA86A25040,$F0217CFC1650A0BB,$14055A1698533FB3,$E69E4C27ABAA7662,$F2417F348C3C67F6,$5F4368EF08E80DCF,$2A9A50A513F210F2,$09D915D003A9430E,$0C2F6EFDF8ADA11D,$3B982A684DC33ED4,$ACAF8FE621E5E7E8,$25C9EAF0E707B3C5,$EA8F166B1FB4BCDC,$B53BFE0371B2FD62,$7AC0EA199EDE3677,$6D8F670FFB63EB10,$E2D7687007CBADC4,$7420A0C7DFE922AE,$6E40BFD6DE7FC07C,$9BC7F1AE6A680B32,$68E96EBCB57BAB7B,$B9EC07A71087BA2A,$D2A9A1E757A7BFD7,$677286BC0165CC05,$8C3CE2D7C15F33F0,$A20A32E4CDC38E95,$0A3DEB2F1C4DB75F,$E58C28E0CDC01F23,$A709B8077F5DC3B6,$935B1015DB6658D0,$EF53701FEE410EA6,$E0A7F4DC08FE9780,$EFB3BDB59E20BC65,$27059E24E0ABE4DC,$52C9C1F769F808FE,$7EED984B6D990167,$045D26E02ED54D1F,$74908E9D521AE537,$9277D3BDB66F9E8B,$AA68BDD89CC9B74F,$D3BDB053CF9E41B0,$ADDD685392418CB6,$53CF750E05F9C821,$F028A077CD62357E,$87713818F1277B28,$CCB1ACF53E03DE48,$CED2C05993928112,$8E55C94C6091248D,$4401D44D457F6410,$FD5852D8A3806E1A,$D98BA84D9B64845A,$99245B3C9A73F249,$92ACADDF5CB2621F,$6454E625F507BC60,$26EEC5D45DEA5E0F,$69CDCA9BF8DB5771,$2656FFB07C939A27,$6ED91E3E28127ABA,$70635ADB549268B7,$52410F79E391D5B2,$86FA987BEE96DD6D,$E41D024C894424CC,$D73FFEB7DF989130,$006BCEB155A0582D,$AE444E4549000000:Data.b $42,$60,$82
   I_Internet: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449D102000061,$41F02F7062DA7854,$1DB880E4C3CB0DC1,$01BE287FF1006F88,$0480C4CF57439315,$1E8539F97BD98CCC,$544EFBE456645906,$B6C00E4D740608AF,$6D72F69AFE1800E3,$0F5C31B6DB6DB6DB,$6B077B6DAC1CB877,$C5C7B9EE31E6D9F3,$E74DEFCF35E4DA49,$4BE1E0DE717FF2AB,$BCE3DD9F73FEE75E,$320D81BD787E6F43,$DE47A6B2B3BAB336,$FC69BDC7EFC5E0BA,$B4C4609D375291A8,$4BF4D365F969AA83,$BCF7FF5F315299F6,$FADEFFB07A35D9B1,$F763AEEA3BB7FDC9,$5B34318C4B589F3D,$11C21E3AE2E108A3,$CCD3E39F63209368,$DC007597789CBB21,$D68775A761DDAEF3,$CD8B658E2DEF74FF,$6E30C68F9F9B22B6,$B78D936189240FCA,$6438C8D1A03001C2,$8EFF82EA6776CDBB,$F2529EBBCEDD6F59,$E194568E3D7683AE,$8343128D6A2D09DF,$D85EDDBCEC3181EB,$810071C20397B1A7,$FDBE4CE7DE8E038C,$5C8BA9EA84BBADFB,$62D8947A2286F023,$1B0DD248DBD641DB,$346310A9E9F32A14,$5324327A13E92746,$9494F5D635898598,$24FA1352D50DA3DB,$17AD0C15C71F5BC2,$E03770198FC4D7F1,$D6B43D75C0EF53BC,$C41CFDD427EFFCFC,$E5DCF64A5215D61E,$70DB3626E93ECE10,$E30D568D02B9B257,$8CF325A0A9B7AC45,$C24C484E890BF19F,$C7CA0491DA30C0E0,$51176D1D994942BA,$CEEFB067FEF8715A,$FC2D86E9572C5327,$8E891CF5AA226914,$47588F3CB6491389,$7CF839DAEB00BEE8,$D7E3A4B151BFACE2,$27497E8867CC65F9,$5DBB40648874A76C,$D6A6FFB3C988A947,$758DBD668F4D22C9,$4CFCC7BFA5F25285,$73D19FFFD3F3A83B,$B62DF43B4449845A,$CB9E53254FCDCC07,$0A2098FE82BFE3EF,$03FEA85758CA1628,$7BDFE7A9ED7AF5B2,$F8C40CC2FF8BE98C,$215433ED95374F91,$26E9C7EBE379F3CA,$DA744B0B72282423,$D0F758002BACA7ED,$9572954BCC99B307,$0B4272D17B090C20,$C8AB8086E0CC5F4E,$0EB25FD72B522FCE,$77751D1B7930EAB0,$E50CA4EE767AD2BD,$73B49523EBBF0D5C,$9BCCA30B5407E043,$B4C3ED766C66C59C,$2794A77758AF6392,$FE5C2CE598A61653,$E76E004BF3B5A76F,$00004E197C3C51EC,$42AE444E45490000:Data.b $60,$82
+  I_Settings: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449EA01000061,$D4002F7062DA7854,$EF1451848A9E064D,$32D594BFD1E2586F,$25110A4910B4953C,$AA495336AF204A88,$2A90841555108A2A,$E0020281500A1044,$CCE9F8510CAE77EC,$BEB18D7EEFDEE7B9,$4FEA100AEBAF5EA5,$615BF2A54A8797B9,$FA810F1E3C0A6856,$54A03B79FC52FDE9,$6CE272264C9BFD2A,$1478F1C3B76EC336,$53A74C356AD5E9A8,$6BCF9F2032FEACA8,$F3E70DDBB710E1C3,$AB01C38705CB9719,$7EFDDAC7A6888AD5,$1932640631ECB307,$76C7BF7EC458B14B,$7CF98162C5A695BB,$D966198D63D3444E,$B76E8ED3A7480C63,$66DD6515C972E58B,$66358F4D4090C9B3,$BAE3C7880C8F6598,$AD5AA11A347138C2,$C7A6A10B0A3F7942,$468A6E89D62373DA,$3060E2B2AF5EB8A3,$3CCDF2A2963C78C0,$D966198D63D35081,$B366C21428535EC3,$2C6AB26AE7DFBF41,$58F4D4018DF28316,$F7E4D7B0F6598663,$FE55DE18FF0575FB,$BE28FDE501A346E1,$B30CC0AF2F5F3508,$1C78F1E09CAF61EC,$4E9D0B56AD024489,$8409E06C1AF5EB07,$8499324CC6B1E903,$9B76EDC16F1971EA,$E5CA36EDDA2F5EBD,$3A74F3DC9EBD7A32,$F3E7C66358F4D111,$BB76EC03197CF541,$2CD9B2FDC94A9523,$CD4267C06C82850A,$DF3D55B733E359B5,$44891E9A69A200C6,$4DE4040810B972E0,$C20C183A223972E4,$B7D9830E1C2274E9,$28B0ABFB66CD931F,$667A7EA0553C15BE,$AD5AB05F1AFA7EFE,$A63FEE53FA8402BA,$00F510D56522461B,$AE444E4549000000:Data.b $42,$60,$82
   ;The following icons are used form the icon set "Glyphish Icons": https://www.iconarchive.com/show/glyphish-icons-by-glyphish.html and https://www.glyphish.com/
   I_Control:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449BC00000061,$83082F93DDDA7854,$B760F7B1D7C61440,$6165EB9ACB0459AE,$F63AE327B06EB2C1,$0B3B3D7B75C3AE1E,$E38F0BF07BDB860B,$EEF8E3F0B1958C64,$2BE9DBDA1E2883FB,$08785E9A69A0687E,$8BB8E04C2704D851,$53D31AE5A03B7A64,$31981DB57AC868F0,$6708BCA4FA70210A,$08503D656076CDE3,$55EAA723E51308E8,$82827BBD092E5ABB,$47C43A0752BC62F2,$4E2910181D3A00EF,$26303A0CC9DB83B8,$F0EF5BDFA6D09B97,$A2D16C5C0DCC61A2,$BC25709E12A06E5E,$E99F83FABE4C668B,$6A8D5B3947EDD405,$4E45490000000045:Data.b $44,$AE,$42,$60,$82
   
+  ;More icons
+  I_About:    : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$6891900000000208,$5948700900000036,$0B0000120B000073,$0000FC7EDDD20112,$DA78544144498502,$DE105D5D7003524C,$6B36DB6FC6CF573D,$CC39563BB6D41CDB,$19E76C66DB6DB6B0,$0FBFAC638C6E5E99,$000C04000D99CC37,$2D30F71E22FEBA62,$C379EDCFA1228E15,$40323C40471892ED,$A788AF4DCD062224,$5CD82CCB1D166637,$8B11B549F4F0BD14,$41595B9456B95963,$0007B35B8D4120D4,$8A94CD33B5595E7C,$420CCEF0BBE8FC42,$43B192F3D1B08322,$37EA1E4D81BDF13F,$0AC7FDF0ED745440,$02007761A6F7C131,$6BFDFDFE5AB76643,$20029D2468B38802,$91434A888E0D6444,$EF3BD2B56AC264D2,$C06631FC06634A80,$9F4DF0F977E72BDF,$54514CF0BA9FCADB,$A84A6224D4397680,$3997DB3198BD67EA,$D53244F5E8F9BE67,$D2E4FE0FA67787E5,$965DBB0633A789E6,$5E37C0410566C926,$FD4D0C96FC143D7F,$FFFFE3A990ECBFEC,$53C3ED713E57BD9C,$420C515EB81FAFB9,$03D7878B610D4D6E,$6310A99D7C1F57DE,$E63AC2FCFEDBC798,$5535D583EFFFE317,$77FE9C0FEBF9B366,$DCA6F801110513DF,$1E8B241D0C144C2D,$1A11C1D06F2EF30B,$BC5F9FDA72B8BB2E,$605DBE2E61CB7E1B,$E006ACB9B0915873,$FEEFFDE97E576BC1,$592BFBD057CE7E52,$E7ACA4A345000200,$0C921B5488B12995,$A7E3D4180381C96C,$026FCBC67FD27FA9,$0DA508C362181131,$4066C3A5320443B7,$F113766200516A44,$CAD50C505EA96648,$74BCD3DC6DBAB84D,$103C824D408AA666,$007837DDE8032403,$B946004F9EF8EAA6,$6BC1E2417EBBCA55,$1A110084EF58CCE3,$7B90BD19587D4024,$D5318C0800A0CDE7,$9EBB35A059911830,$AE3181CA0B902CBD,$FE4BF2F8645C4B95,$E3DCF979399C1F77,$D3A0BDE551150C98,$4F23C6F263AA156E,$A3424D114CDFA5B3,$B1EBB1DF8C6C2321,$B99E6B86CF53E763,$BDF78C8A7DEF6DAB,$AB365D7B6F47F1FF,$AC6F07B6D712FC77,$F35359E6C8FEDBAF,$69001103171616F2,$00F456DB4DFA2E70,$AE444E4549000000:Data.b $42,$60,$82
   ;Winning animation:
-  Win:   : IncludeBinary "Win.anim"
+  Win:        : IncludeBinary "Win.anim"
+EndDataSection
+DataSection;More data...
+  Windows: : IncludeBinary "Mondrian.xml" : WindowsEnd:
 EndDataSection
