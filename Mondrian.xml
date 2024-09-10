@@ -2,8 +2,16 @@
 
 	<window id='#PB_Any' name='Settings_DE' text='Einstellungen' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
 		<vbox>
-			<checkbox id='#Gadget_SharpCorners' text='Keine abgerundeten Ecken'/>
-			<checkbox id='#Gadget_NoGradient' text='Kein Farbverlauf'/>
+			<frame text='Darstellung'>
+				<vbox>
+					<checkbox id='#Gadget_SharpCorners' text='Keine abgerundeten Ecken'/>
+					<checkbox id='#Gadget_NoGradient' text='Kein Farbverlauf'/>
+					<checkbox id='#Gadget_LightColors' text='Hellere Farben'/>
+					<checkbox id='#Gadget_ThinBorders' text='Dünne Ränder'/>
+					<checkbox id='#Gadget_NoWinAnimation' text='Keine Animation bei Sieg'/>
+					<checkbox id='#Gadget_RandomOrientation' text='Lade Puzzle mit zufälliger Drehung'/>
+				</vbox>
+			</frame>
 			<hbox expand='item:2'>
 				<button id='#Gadget_Cancel' text=' Abbrechen '/>
 				<empty/>
@@ -14,8 +22,16 @@
 
 	<window id='#PB_Any' name='Settings_EN' text='Settings' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
 		<vbox>
-			<checkbox id='#Gadget_SharpCorners' text='No sharp corners'/>
-			<checkbox id='#Gadget_NoGradient' text='No gradient'/>
+			<frame text='Graphics'>
+				<vbox>
+					<checkbox id='#Gadget_SharpCorners' text='No rounded corners'/>
+					<checkbox id='#Gadget_NoGradient' text='No gradient'/>
+					<checkbox id='#Gadget_LightColors' text='Lighter colors'/>
+					<checkbox id='#Gadget_ThinBorders' text='Thin borders'/>
+					<checkbox id='#Gadget_NoWinAnimation' text='No winning animation'/>
+					<checkbox id='#Gadget_RandomOrientation' text='Load puzzle with random orientation'/>
+				</vbox>
+			</frame>
 			<hbox expand='item:2'>
 				<button id='#Gadget_Cancel' text=' Cancel '/>
 				<empty/>

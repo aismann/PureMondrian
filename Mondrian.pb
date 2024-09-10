@@ -1,4 +1,4 @@
-;PureMondrian 1.5.0 by Jac de Lad
+﻿;PureMondrian 1.5.1 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -8,18 +8,23 @@ Runtime Enumeration Windows
   #SettingsWindow
 EndEnumeration
 Runtime Enumeration Gadgets
-  #Canvas
-  #CanvasTools
-  #List
-  #RandomButton
-  #InfoButton
-  #Progress
+  #Gadget_Canvas
+  #Gadget_CanvasTools
+  #Gadget_CanvasTime
+  #Gadget_List
+  #Gadget_RandomButton
+  #Gadget_InfoButton
   #Gadget_Cancel
   #Gadget_Save
   #Gadget_NoGradient
   #Gadget_SharpCorners
+  #Gadget_ThinBorders
+  #Gadget_LightColors
+  #Gadget_NoWinAnimation
+  #Gadget_Progress
+  #Gadget_RandomOrientation
 EndEnumeration
-Enumeration Image
+Enumeration Images
   #Image_Rotate
   #Image_RotateBW
   #Image_ARotate
@@ -35,11 +40,18 @@ Enumeration Image
   #Image_Control
   #Image_Internet
   #Image_About
+  #Image_Dice
   #Image_Settings
 EndEnumeration
-Enumeration Menu
+Enumeration Menus
   #Menu_DE
   #Menu_EN
+EndEnumeration
+Enumeration Fonts
+  #Font_Standard
+  #Font_Progress
+  #Font_Progress2
+  #Font_Vector
 EndEnumeration
 
 Structure XY
@@ -89,26 +101,45 @@ Structure Settings
   Language.a
   SharpCorners.a
   NoGradient.a
+  ThinBorders.a
+  LightColors.a
+  NoWinAnimation.a
+  RandomOrientation.a
 EndStructure
 
-Global.i Thread,ToolMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread
+#Version          = "1.5.1"
+#AutoSolve_Enable = #False
+#AutoSolve_Time   = 60000
+#Custom_Enable    = #False
+
+Global.i Thread,DrawVectorMutex=CreateMutex(),DrawMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,GThread
 Global.l Background,BestTime,Button
-Global.a Language=1,Solved=#True,NoDrop,Tool,Timer,SolveMode,Progress,DarkTheme,Difficulty
+Global.a Language=1,Solved=#True,NoDrop,Tool,Timer,SolveMode,Progress,DarkTheme,Difficulty,StopGenerator
 Global.b DragTile=-1,ProgButton=-1
 Global.w MX,MY,X,Y
 Global.q InitTimer,EndTimer
-Global Dim PProgress.w(3),Dim TCount.w(3),Dim Field.a(7,7)
+Global Dim PProgress.w(4),Dim TCount.w(4),Dim Field.a(7,7)
 Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",SettingsFile$=SaveDir$+"PureMondrian.cfg"
 Global.Puzzle *Puzzle
 Global.Settings Settings
 Global NewList Tiles.Tile(),NewList PositionMatrix.MPos(),NewList Puzzles.Puzzle()
 Global NewMap Color.l()
-Global.i VFont=LoadFont(#PB_Any,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality)
-Global.i PFont=LoadFont(#PB_Any,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality)
-Global.i PTFont=LoadFont(#PB_Any,"Verdana",8,#PB_Font_HighQuality)
 If Not FileSize(SaveDir$)=-2
   CreateDirectory(SaveDir$)
 EndIf
+;{ Loading Fonts
+LoadFont(#Font_Standard,"Verdana",10,#PB_Font_HighQuality)
+LoadFont(#Font_Vector,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality)
+LoadFont(#Font_Progress,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality)
+LoadFont(#Font_Progress2,"Verdana",8,#PB_Font_HighQuality)
+;}
+
+Procedure SetTileColors(*Colors)
+  SelectElement(Tiles(),3)
+  Repeat
+    Tiles()\Color=$FF000000|PeekL(*Colors+4*(ListIndex(Tiles())-3))
+  Until Not NextElement(Tiles())
+EndProcedure
 
 Procedure AddPathRoundBox(x.d,y.d,w.d,h.d,radius.d,flags=#PB_Path_Default)
   If Solved Or Settings\SharpCorners
@@ -126,7 +157,8 @@ Procedure Draw(Mode)
   Protected PL.a,MX.w,MY.w
   Protected X.w,Y.w,W.w,H.w,PX.w,PY.w,PEX.w,PEY.w
   
-  StartVectorDrawing(CanvasVectorOutput(#Canvas))
+  LockMutex(DrawVectorMutex)
+  StartVectorDrawing(CanvasVectorOutput(#Gadget_Canvas))
   VectorSourceColor(Background)
   FillVectorOutput()
   ScaleCoordinates(DesktopResolutionX(), DesktopResolutionY())
@@ -143,11 +175,19 @@ Procedure Draw(Mode)
   EndIf
   ForEach Tiles()
     If Mode
-      AddPathBox(41+40*Tiles()\Position()\X,41+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1)-3,40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1)-3)
+      If Settings\ThinBorders
+        AddPathBox(40+40*Tiles()\Position()\X,39+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1),40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1))
+      Else
+        AddPathBox(41+40*Tiles()\Position()\X,41+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1)-3,40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1)-3)
+      EndIf
     Else
       FirstElement(Tiles()\Position())
       If Tiles()\Fixed
-        AddPathRoundBox(41+40*Tiles()\Position()\X,41+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1)-3,40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1)-3,8)
+        If Settings\ThinBorders
+          AddPathRoundBox(40+40*Tiles()\Position()\X,39+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1),40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1),8)
+        Else
+          AddPathRoundBox(41+40*Tiles()\Position()\X,41+40*Tiles()\Position()\Y,40*(Tiles()\Position()\EX-Tiles()\Position()\X+1)-3,40*(Tiles()\Position()\EY-Tiles()\Position()\Y+1)-3,8)
+        EndIf
       Else
         If Tiles()\NowX=-1
           If DragTile=ListIndex(Tiles())
@@ -157,10 +197,18 @@ Procedure Draw(Mode)
             AddPathRoundBox(Tiles()\DragX,Tiles()\DragY,Tiles()\DragW,Tiles()\DragH, 8)
           EndIf
         Else
-          If Tiles()\NowRot
-            AddPathRoundBox(41+40*Tiles()\NowX,41+40*Tiles()\NowY,40*Tiles()\Y-3,40*Tiles()\X-3, 8)
+          If Settings\ThinBorders
+            If Tiles()\NowRot
+              AddPathRoundBox(40+40*Tiles()\NowX,39+40*Tiles()\NowY,40*Tiles()\Y,40*Tiles()\X, 8)
+            Else
+              AddPathRoundBox(40+40*Tiles()\NowX,39+40*Tiles()\NowY,40*Tiles()\X,40*Tiles()\Y, 8)
+            EndIf
           Else
-            AddPathRoundBox(41+40*Tiles()\NowX,41+40*Tiles()\NowY,40*Tiles()\X-3,40*Tiles()\Y-3, 8)
+            If Tiles()\NowRot
+              AddPathRoundBox(41+40*Tiles()\NowX,41+40*Tiles()\NowY,40*Tiles()\Y-3,40*Tiles()\X-3, 8)
+            Else
+              AddPathRoundBox(41+40*Tiles()\NowX,41+40*Tiles()\NowY,40*Tiles()\X-3,40*Tiles()\Y-3, 8)
+            EndIf
           EndIf
         EndIf
       EndIf
@@ -179,7 +227,7 @@ Procedure Draw(Mode)
     
     FillPath(#PB_Path_Preserve)
     VectorSourceColor(RGBA(64,64,64,255))
-    StrokePath(3)
+    StrokePath(3-2*Settings\ThinBorders)
   Next
   If PL
     PopListPosition(Tiles())
@@ -224,10 +272,11 @@ Procedure Draw(Mode)
     EndIf
     FillPath(#PB_Path_Preserve)
     VectorSourceColor(RGBA(0,0,0,255))
-    StrokePath(2)
+    StrokePath(2-Settings\ThinBorders)
   EndIf
   
   StopVectorDrawing()
+  UnlockMutex(DrawVectorMutex)
 EndProcedure
 
 Macro DrawTool(MyX,MyImage,MyBWImage,MyTool)
@@ -256,36 +305,20 @@ Macro Time()
   Time=Mod(Time,1000)
   VT$+RSet(Str(Time),3,"0")
 EndMacro
-Procedure DrawTools()
-  Protected MX.w,MY.w,X.w,H.w,W.w,Y.w,GGS.a
-  LockMutex(ToolMutex)
-  StartVectorDrawing(CanvasVectorOutput(#CanvasTools))
+Procedure DrawTime()
+  LockMutex(DrawVectorMutex)
+  StartVectorDrawing(CanvasVectorOutput(#Gadget_CanvasTime))
   VectorSourceColor(Background)
   FillVectorOutput()
-  ScaleCoordinates(DesktopResolutionX(), DesktopResolutionY())
-  MX=DesktopUnscaledX(WindowMouseX(#MainWindow))
-  MY=DesktopUnscaledY(WindowMouseY(#MainWindow))-GadgetHeight(#Canvas)
-  W=DesktopUnscaledX(VectorOutputWidth())
-  H=DesktopUnscaledY(VectorOutputHeight())
-  X=0.5*W
-  Y=0.5*H
-  Tool=0
-  GGS=Bool(GetGadgetState(#List)=-1)
-  If SolveMode
-    DrawTool(W-216,#Image_Solve,#Image_SolveBW,1)
-  EndIf
-  DrawTool(W-144,#Image_Reset,#Image_ResetBW,2)
-  DrawTool(W-96,#Image_ARotate,#Image_ARotateBW,3)
-  DrawTool(W-48,#Image_Rotate,#Image_RotateBW,4)
   If Timer>0
     Protected VT$,Time.l,TM.a
-    VectorFont(FontID(VFont),20)
+    VectorFont(FontID(#Font_Vector),20)
     If Timer=1
       Time=ElapsedMilliseconds()-InitTimer
     ElseIf Timer=2
       Time=EndTimer-InitTimer
     EndIf
-    If Time>600000 And InitTimer And Not Solved
+    If Time>#AutoSolve_Time And InitTimer And Not Solved And #AutoSolve_Enable
       SolveMode=#True
     EndIf
     If BestTime=0 Or InitTimer=0
@@ -314,7 +347,31 @@ Procedure DrawTools()
     DrawVectorText(VT$)
   EndIf
   StopVectorDrawing()
-  UnlockMutex(ToolMutex)
+  UnlockMutex(DrawVectorMutex)
+EndProcedure
+Procedure DrawTools()
+  Protected MX.w,MY.w,X.w,H.w,W.w,Y.w,GGS.a
+  LockMutex(DrawVectorMutex)
+  StartVectorDrawing(CanvasVectorOutput(#Gadget_CanvasTools))
+  VectorSourceColor(Background)
+  FillVectorOutput()
+  ScaleCoordinates(DesktopResolutionX(), DesktopResolutionY())
+  MX=DesktopUnscaledX(WindowMouseX(#MainWindow))-GadgetWidth(#Gadget_CanvasTime)
+  MY=DesktopUnscaledY(WindowMouseY(#MainWindow))-GadgetHeight(#Gadget_Canvas)
+  W=DesktopUnscaledX(VectorOutputWidth())
+  H=DesktopUnscaledY(VectorOutputHeight())
+  X=0.5*W
+  Y=0.5*H
+  Tool=0
+  GGS=Bool(GetGadgetState(#Gadget_List)=-1)
+  If SolveMode
+    DrawTool(W-192,#Image_Solve,#Image_SolveBW,1)
+  EndIf
+  DrawTool(W-144,#Image_Reset,#Image_ResetBW,2)
+  DrawTool(W-96,#Image_ARotate,#Image_ARotateBW,3)
+  DrawTool(W-48,#Image_Rotate,#Image_RotateBW,4)
+  StopVectorDrawing()
+  UnlockMutex(DrawVectorMutex)
 EndProcedure
 
 Procedure BlackWhite(OutImage,Address)
@@ -340,21 +397,23 @@ Procedure Animation(Anim)
   Protected Frame
   Repeat
     SetImageFrame(Anim,Frame)
-    If StartDrawing(CanvasOutput(#Canvas))
+    LockMutex(DrawMutex)
+    If GetGadgetState(#Gadget_List)<>-1 And StartDrawing(CanvasOutput(#Gadget_Canvas))
       DrawImage(ImageID(Anim),0,400,400,214)
       StopDrawing()
     EndIf
+    UnlockMutex(DrawMutex)
     Frame+1
     Delay(GetImageFrameDelay(Anim))
-  Until Frame>=ImageFrameCount(Anim) Or Solved=#False
+  Until Frame>=ImageFrameCount(Anim) Or Solved=#False Or GetGadgetState(#Gadget_List)=-1
   If Solved=#False
     Draw(0)
   EndIf
 EndProcedure
 
-Procedure Solve()
+Procedure Solve(Mode=0)
   DisableDebugger
-  Protected X.a,Y.a,*Pos.Tile,*MPos.MPos,NewList Locked.XY(),Position.w,Del.a,NewList Occupied.Tile(),Dim Field.a(7,7),Done.a,error.a
+  Protected X.a,Y.a,*Pos.Tile,*MPos.MPos,NewList Locked.XY(),Position.w,Del.a,NewList Occupied.Tile(),Dim Field.a(7,7),Done.a,error.a,Solutions.l
   
   ;Create tile matrix
   ForEach Tiles()
@@ -468,9 +527,10 @@ Procedure Solve()
           Next
         Next
       EndIf
-    Next  
+    Next
     
     If Done
+      Solutions+1
       Break
     EndIf
     
@@ -481,10 +541,12 @@ Procedure Solve()
         If PreviousElement(Tiles())
           Tiles()\RPosition+1
         Else
-          If Language
-            MessageRequester("Error","There was no solution found!",#PB_MessageRequester_Error)
-          Else
-            MessageRequester("Fehler","Es konnte keine Lösung gefunden werden!",#PB_MessageRequester_Error)
+          If Not Mode
+            If Language
+              MessageRequester("Error","There was no solution found!",#PB_MessageRequester_Error)
+            Else
+              MessageRequester("Fehler","Es konnte keine Lösung gefunden werden!",#PB_MessageRequester_Error)
+            EndIf
           EndIf
           error=#True
           Break 2
@@ -497,7 +559,7 @@ Procedure Solve()
     
   ForEver
   
-  If Not error
+  If Not Mode And  Not error
     Solved=#True
     Draw(#True)
     Timer=0
@@ -505,144 +567,10 @@ Procedure Solve()
   EndIf
   
   EnableDebugger
+  ProcedureReturn Solutions
 EndProcedure
 
-Procedure LoadList(Difficulty)
-  Protected Image.i
-  ClearGadgetItems(#List)
-  ForEach Puzzles()
-    If Puzzles()\Difficulty=Difficulty
-      If Puzzles()\State
-        Image=Puzzles()\DoneImage
-      Else
-        Image=Puzzles()\Image
-      EndIf
-      AddGadgetItem(#List,-1,"Puzzle "+Str(ListIndex(Puzzles())+1),ImageID(Image))
-      SetGadgetItemData(#List,CountGadgetItems(#List)-1,@Puzzles())
-    EndIf
-  Next
-  StartVectorDrawing(CanvasVectorOutput(#Canvas))
-  VectorSourceColor(Background)
-  FillVectorOutput()
-  StopVectorDrawing()
-  DrawTools()
-EndProcedure
-Macro DrawMiniTiles()
-  Box(2,2,8*Size,8*Size,Background)
-  Box(2+Puzzles()\Tile1X*Size,2+Puzzles()\Tile1Y*Size,Size,Size,Color("Text"))
-  If Puzzles()\Tile2R
-    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size,Size*2,Color("Text"))
-  Else
-    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size*2,Size,Color("Text"))
-  EndIf
-  If Puzzles()\Tile3R
-    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size,Size*3,Color("Text"))
-  Else
-    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size*3,Size,Color("Text"))
-  EndIf
-EndMacro
-Procedure LoadPuzzles()
-  Protected *Mem=?Puzzles,Size.a=4,Puzzle$
-  Repeat
-    AddElement(Puzzles())
-    Puzzles()\ID=PeekL(*Mem);Val(Str(Puzzles()\Difficulty)+Str(Puzzles()\Tile1X)+Str(Puzzles()\Tile1Y)+Str(Puzzles()\Tile2X)+Str(Puzzles()\Tile2Y)+Str(Puzzles()\Tile2R)+Str(Puzzles()\Tile3X)+Str(Puzzles()\Tile3Y)+Str(Puzzles()\Tile3R))
-    Puzzle$=RSet(Str(Puzzles()\ID),9,"0")
-    Puzzles()\Difficulty=Val(Mid(Puzzle$,1,1))
-    Puzzles()\Tile1X=Val(Mid(Puzzle$,2,1))
-    Puzzles()\Tile1Y=Val(Mid(Puzzle$,3,1))
-    Puzzles()\Tile2X=Val(Mid(Puzzle$,4,1))
-    Puzzles()\Tile2Y=Val(Mid(Puzzle$,5,1))
-    Puzzles()\Tile2R=Val(Mid(Puzzle$,6,1))
-    Puzzles()\Tile3X=Val(Mid(Puzzle$,7,1))
-    Puzzles()\Tile3Y=Val(Mid(Puzzle$,8,1))
-    Puzzles()\Tile3R=Val(Mid(Puzzle$,9,1))
-    TCount(Puzzles()\Difficulty)=TCount(Puzzles()\Difficulty)+1
-    Puzzles()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,Color("Border"))
-    StartDrawing(ImageOutput(Puzzles()\Image))
-    DrawMiniTiles()
-    StopDrawing()
-    Puzzles()\DoneImage=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,#Green)
-    StartDrawing(ImageOutput(Puzzles()\DoneImage))
-    DrawMiniTiles()
-    DrawingMode(#PB_2DDrawing_AlphaBlend)
-    DrawImage(ImageID(#Image_Done),0,0)
-    StopDrawing()
-    *Mem+4
-  Until *Mem>=?PuzzlesEnd
-EndProcedure
-Procedure LoadPuzzle(*Puzzle.Puzzle)
-  Protected X.a
-  Solved=#False
-  ForEach Tiles()
-    ClearList(Tiles()\Position())
-  Next
-  FirstElement(Tiles())
-  AddElement(Tiles()\Position())
-  Tiles()\Position()\X=*Puzzle\Tile1X
-  Tiles()\Position()\Y=*Puzzle\Tile1Y
-  NextElement(Tiles())
-  AddElement(Tiles()\Position())
-  Tiles()\Position()\X=*Puzzle\Tile2X
-  Tiles()\Position()\Y=*Puzzle\Tile2Y
-  Tiles()\Position()\Rot=*Puzzle\Tile2R
-  NextElement(Tiles())
-  AddElement(Tiles()\Position())
-  Tiles()\Position()\X=*Puzzle\Tile3X
-  Tiles()\Position()\Y=*Puzzle\Tile3Y
-  Tiles()\Position()\Rot=*Puzzle\Tile3R
-  FreeArray(Field())
-  Dim Field(7,7)
-  ForEach Tiles()
-    If Tiles()\Fixed
-      ForEach Tiles()\Position()
-        If Tiles()\Position()\Rot
-          Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\Y-1
-          Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\X-1
-          For X=1 To Tiles()\X
-            Field(Tiles()\Position()\X,Tiles()\Position()\Y+X-1)=1
-          Next
-        Else
-          Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\X-1
-          Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\Y-1
-          For X=1 To Tiles()\X
-            Field(Tiles()\Position()\X+X-1,Tiles()\Position()\Y)=1
-          Next
-        EndIf
-      Next
-    Else
-      Tiles()\NowX=-1
-      Tiles()\NowRot=0
-      Tiles()\DragRot=0
-      Tiles()\DragX=41+30*Tiles()\InitX
-      Tiles()\DragY=401+30*Tiles()\InitY
-      Tiles()\DragW=25*Tiles()\X-2
-      Tiles()\DragH=25*Tiles()\Y-2
-    EndIf
-  Next
-EndProcedure
-Procedure LoadNextPuzzle()
-  Protected Done.a,X.w,*Puzzle.Puzzle
-  ForEach Puzzles()
-    If Puzzles()\State=#False
-      *Puzzle=@Puzzles()
-      LoadList(Puzzles()\Difficulty)
-      Difficulty=*Puzzle\Difficulty
-      For X=0 To CountGadgetItems(#List)-1
-        If GetGadgetItemData(#List,X)=*Puzzle
-          SetGadgetState(#List,X)
-          PostEvent(#PB_Event_Gadget,#MainWindow,#List,#PB_EventType_Change)
-          Break
-        EndIf
-      Next
-      Done=#True
-    EndIf
-  Next
-  If Not Done
-    LoadList(0)
-  EndIf
-EndProcedure
-
-Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
+Procedure Rotate(Direction,NoDraw=#False);0=Counterclockwise, 1=Clockwise
   Protected X.a,Y.a,Dim Temp.a(0,0),TX.a,TY.a
   CopyArray(Field(),Temp())
   
@@ -720,7 +648,156 @@ Procedure Rotate(Direction);0=Counterclockwise, 1=Clockwise
         EndIf
       Next
     Next
-    Draw(#False)
+    If Not NoDraw
+      Draw(#False)
+    EndIf
+  EndIf
+EndProcedure
+
+Procedure LoadList(Difficulty)
+  Protected Image.i
+  ClearGadgetItems(#Gadget_List)
+  ForEach Puzzles()
+    If Puzzles()\Difficulty=Difficulty
+      If Puzzles()\State
+        Image=Puzzles()\DoneImage
+      Else
+        Image=Puzzles()\Image
+      EndIf
+      AddGadgetItem(#Gadget_List,-1,"Puzzle "+Str(ListIndex(Puzzles())+1),ImageID(Image))
+      SetGadgetItemData(#Gadget_List,CountGadgetItems(#Gadget_List)-1,@Puzzles())
+    EndIf
+  Next
+  LockMutex(DrawVectorMutex)
+  StartVectorDrawing(CanvasVectorOutput(#Gadget_Canvas))
+  VectorSourceColor(Background)
+  FillVectorOutput()
+  StopVectorDrawing()
+  DrawTools()
+  UnlockMutex(DrawVectorMutex)
+EndProcedure
+Macro DrawMiniTiles()
+  Box(2,2,8*Size,8*Size,Background)
+  Box(2+Puzzles()\Tile1X*Size,2+Puzzles()\Tile1Y*Size,Size,Size,Color("Text"))
+  If Puzzles()\Tile2R
+    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size,Size*2,Color("Text"))
+  Else
+    Box(2+Puzzles()\Tile2X*Size,2+Puzzles()\Tile2Y*Size,Size*2,Size,Color("Text"))
+  EndIf
+  If Puzzles()\Tile3R
+    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size,Size*3,Color("Text"))
+  Else
+    Box(2+Puzzles()\Tile3X*Size,2+Puzzles()\Tile3Y*Size,Size*3,Size,Color("Text"))
+  EndIf
+EndMacro
+Procedure LoadPuzzles()
+  Protected *Mem=?Puzzles,Size.a=4,Puzzle$
+  Repeat
+    AddElement(Puzzles())
+    Puzzles()\ID=PeekL(*Mem);Val(Str(Puzzles()\Difficulty)+Str(Puzzles()\Tile1X)+Str(Puzzles()\Tile1Y)+Str(Puzzles()\Tile2X)+Str(Puzzles()\Tile2Y)+Str(Puzzles()\Tile2R)+Str(Puzzles()\Tile3X)+Str(Puzzles()\Tile3Y)+Str(Puzzles()\Tile3R))
+    Puzzle$=RSet(Str(Puzzles()\ID),9,"0")
+    Puzzles()\Difficulty=Val(Mid(Puzzle$,1,1))
+    Puzzles()\Tile1X=Val(Mid(Puzzle$,2,1))
+    Puzzles()\Tile1Y=Val(Mid(Puzzle$,3,1))
+    Puzzles()\Tile2X=Val(Mid(Puzzle$,4,1))
+    Puzzles()\Tile2Y=Val(Mid(Puzzle$,5,1))
+    Puzzles()\Tile2R=Val(Mid(Puzzle$,6,1))
+    Puzzles()\Tile3X=Val(Mid(Puzzle$,7,1))
+    Puzzles()\Tile3Y=Val(Mid(Puzzle$,8,1))
+    Puzzles()\Tile3R=Val(Mid(Puzzle$,9,1))
+    TCount(Puzzles()\Difficulty)=TCount(Puzzles()\Difficulty)+1
+    Puzzles()\Image=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,Color("Border"))
+    LockMutex(DrawMutex)
+    StartDrawing(ImageOutput(Puzzles()\Image))
+    DrawMiniTiles()
+    StopDrawing()
+    Puzzles()\DoneImage=CreateImage(#PB_Any,8*Size+4,8*Size+4,32,#Green)
+    StartDrawing(ImageOutput(Puzzles()\DoneImage))
+    DrawMiniTiles()
+    DrawingMode(#PB_2DDrawing_AlphaBlend)
+    DrawImage(ImageID(#Image_Done),0,0)
+    StopDrawing()
+    UnlockMutex(DrawMutex)
+    *Mem+4
+  Until *Mem>=?PuzzlesEnd
+EndProcedure
+Procedure LoadPuzzle(*Puzzle.Puzzle)
+  Protected X.a,R.a
+  Solved=#False
+  ForEach Tiles()
+    ClearList(Tiles()\Position())
+  Next
+  FirstElement(Tiles())
+  AddElement(Tiles()\Position())
+  Tiles()\Position()\X=*Puzzle\Tile1X
+  Tiles()\Position()\Y=*Puzzle\Tile1Y
+  NextElement(Tiles())
+  AddElement(Tiles()\Position())
+  Tiles()\Position()\X=*Puzzle\Tile2X
+  Tiles()\Position()\Y=*Puzzle\Tile2Y
+  Tiles()\Position()\Rot=*Puzzle\Tile2R
+  NextElement(Tiles())
+  AddElement(Tiles()\Position())
+  Tiles()\Position()\X=*Puzzle\Tile3X
+  Tiles()\Position()\Y=*Puzzle\Tile3Y
+  Tiles()\Position()\Rot=*Puzzle\Tile3R
+  FreeArray(Field())
+  Dim Field(7,7)
+  ForEach Tiles()
+    If Tiles()\Fixed
+      ForEach Tiles()\Position()
+        If Tiles()\Position()\Rot
+          Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\Y-1
+          Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\X-1
+          For X=1 To Tiles()\X
+            Field(Tiles()\Position()\X,Tiles()\Position()\Y+X-1)=1
+          Next
+        Else
+          Tiles()\Position()\EX=Tiles()\Position()\X+Tiles()\X-1
+          Tiles()\Position()\EY=Tiles()\Position()\Y+Tiles()\Y-1
+          For X=1 To Tiles()\X
+            Field(Tiles()\Position()\X+X-1,Tiles()\Position()\Y)=1
+          Next
+        EndIf
+      Next
+    Else
+      Tiles()\NowX=-1
+      Tiles()\NowRot=0
+      Tiles()\DragRot=0
+      Tiles()\DragX=41+30*Tiles()\InitX
+      Tiles()\DragY=401+30*Tiles()\InitY
+      Tiles()\DragW=25*Tiles()\X-2
+      Tiles()\DragH=25*Tiles()\Y-2
+    EndIf
+  Next
+  If Settings\RandomOrientation
+    R=Random(3,0)
+    If R>0
+      For X=1 To R
+        Rotate(0,1)
+      Next
+    EndIf
+  EndIf
+EndProcedure
+Procedure LoadNextPuzzle()
+  Protected Done.a,X.w,*Puzzle.Puzzle
+  ForEach Puzzles()
+    If Puzzles()\State=#False
+      *Puzzle=@Puzzles()
+      LoadList(Puzzles()\Difficulty)
+      Difficulty=*Puzzle\Difficulty
+      For X=0 To CountGadgetItems(#Gadget_List)-1
+        If GetGadgetItemData(#Gadget_List,X)=*Puzzle
+          SetGadgetState(#Gadget_List,X)
+          PostEvent(#PB_Event_Gadget,#MainWindow,#Gadget_List,#PB_EventType_Change)
+          Break
+        EndIf
+      Next
+      Done=#True
+    EndIf
+  Next
+  If Not Done
+    LoadList(0)
   EndIf
 EndProcedure
 
@@ -783,11 +860,15 @@ Procedure SelectNextTile(Direction.a)
 EndProcedure
 
 Procedure LoadProgress()
-  Protected File,ID.l
-  If FileSize(SettingsFile$)>=2
+  Protected File,ID.l,FS.l=FileSize(SettingsFile$)
+  If FS>=1
     File=ReadFile(#PB_Any,SettingsFile$)
     Settings\NoGradient=ReadByte(File)
-    Settings\SharpCorners=ReadByte(File)
+    If FS>=2:Settings\SharpCorners=ReadByte(File):EndIf
+    If FS>=3:Settings\LightColors=ReadByte(File):EndIf
+    If FS>=4:Settings\ThinBorders=ReadByte(File):EndIf
+    If FS>=5:Settings\NoWinAnimation=ReadByte(File):EndIf
+    If FS>=6:Settings\RandomOrientation=ReadByte(File):EndIf
     CloseFile(File)
   EndIf
   If FileSize(SaveFile$)>=0
@@ -813,6 +894,10 @@ Procedure SaveProgress()
   If File
     WriteByte(File,Settings\NoGradient)
     WriteByte(File,Settings\SharpCorners)
+    WriteByte(File,Settings\LightColors)
+    WriteByte(File,Settings\ThinBorders)
+    WriteByte(File,Settings\NoWinAnimation)
+    WriteByte(File,Settings\RandomOrientation)
     CloseFile(File)
   EndIf
   File=CreateFile(#PB_Any,SaveFile$)
@@ -840,6 +925,7 @@ Procedure Progress()
   PProgress(1)=0
   PProgress(2)=0
   PProgress(3)=0
+  PProgress(4)=0
   ForEach Puzzles()
     If Puzzles()\State
       PProgress(Puzzles()\Difficulty)=PProgress(Puzzles()\Difficulty)+1
@@ -849,35 +935,36 @@ Procedure Progress()
 EndProcedure
 Procedure DrawProgress()
   Protected Text$=Str(Progress)+"%",Count.a,Diff$,MX.l,MY.l
-  MX=DesktopUnscaledX(WindowMouseX(#MainWindow))-GadgetX(#Progress)
+  MX=DesktopUnscaledX(WindowMouseX(#MainWindow))-GadgetX(#Gadget_Progress)
   MY=DesktopUnscaledY(WindowMouseY(#MainWindow))
-  If MX>=0 And MY>=0 And MX<=GadgetWidth(#Progress) And MY<=GadgetHeight(#Progress)
+  If MX>=0 And MY>=0 And MX<=GadgetWidth(#Gadget_Progress) And MY<=GadgetHeight(#Gadget_Progress)
     ProgButton=MX/60-1
   Else
     ProgButton=-1
   EndIf
   If Language
-    Diff$="Easy,Medium,Hard,Master,Total"
+    Diff$="Easy,Medium,Hard,Master,Custom,Total"
   Else
-    Diff$="Einfach,Mittel,Schwer,Meister,Gesamt"
+    Diff$="Einfach,Mittel,Schwer,Meister,Custom,Gesamt"
   EndIf
-  StartDrawing(CanvasOutput(#Progress))
-  Box(0,0,300,40,Background)
+  LockMutex(DrawMutex)
+  StartDrawing(CanvasOutput(#Gadget_Progress))
+  Box(0,0,GadgetWidth(#Gadget_Progress),40,Background)
   DrawingMode(#PB_2DDrawing_Transparent)
-  DrawingFont(FontID(PFont))
+  DrawingFont(FontID(#Font_Progress))
   DrawText(30-0.5*TextWidth(Text$),6,Text$,Color("Text"))
-  DrawingFont(FontID(PTFont))
-  Text$=StringField(Diff$,5,",")
+  DrawingFont(FontID(#Font_Progress2))
+  Text$=StringField(Diff$,6,",")
   DrawText(30-0.5*TextWidth(Text$),22,Text$,Color("Text"))
   RoundBox(62+Difficulty*60,2,56,36,4,4,#Green)
   
-  For Count=0 To 3
-    DrawingFont(FontID(PFont))
-    If Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)
+  For Count=0 To 4
+    DrawingFont(FontID(#Font_Progress))
+    If (Count=4 And (TCount(4)=0 Or #Custom_Enable=#False)) Or (Count<>4 And (Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)))
       DrawingMode(#PB_2DDrawing_AlphaBlend)
       DrawImage(ImageID(#Image_Lock),60*(Count+1)+22,6)
       DrawingMode(#PB_2DDrawing_Transparent)
-      DrawingFont(FontID(PTFont))
+      DrawingFont(FontID(#Font_Progress2))
       Text$=StringField(Diff$,Count+1,",")
       DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,#Gray)
     Else
@@ -893,7 +980,7 @@ Procedure DrawProgress()
         Text$=Str(100*PProgress(Count)/TCount(Count))+"%"
         DrawText(60*(Count+1)+30-0.5*TextWidth(Text$),6,Text$,Color("Text"))
       EndIf
-      DrawingFont(FontID(PTFont))
+      DrawingFont(FontID(#Font_Progress2))
       DrawingMode(#PB_2DDrawing_Transparent)
       Text$=StringField(Diff$,Count+1,",")
       DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,Color("Text"))
@@ -901,11 +988,119 @@ Procedure DrawProgress()
   Next
   
   StopDrawing()
+  UnlockMutex(DrawMutex)
 EndProcedure
 
+Procedure Generator(Dummy)
+  Protected File,Set.a,Temp$
+  File=OpenFile(#PB_Any,GetPathPart(ProgramFilename())+"Generator.txt",#PB_UTF8)
+  If File
+    If Lof(File)>0
+      Temp$=ReadString(File)
+      Set=#True
+    Else
+      WriteStringN(File,"0,0,0,0,0,0,0,0")
+    EndIf
+    CloseFile(File)
+  EndIf
+  File=OpenFile(#PB_Any,GetPathPart(ProgramFilename())+"Generator.txt",#PB_UTF8|#PB_File_Append)
+  If File
+    Protected.w X1,Y1,X2,Y2,R2,X3,Y3,R3
+    Protected NewMap Occ.a(6),Puzzle.l,Solutions.l,Found.l,Perc.f
+    For X1=0 To 7
+      For Y1=0 To 7
+        For X2=0 To 7
+          For Y2=0 To 7
+            For X3=0 To 7
+              For Y3=0 To 7
+                For R2=0 To 1
+                  For R3=0 To 1
+                    If Set
+                      Set=#False
+                      X1=Val(StringField(Temp$,1,","))
+                      Y1=Val(StringField(Temp$,2,","))
+                      X2=Val(StringField(Temp$,3,","))
+                      Y2=Val(StringField(Temp$,4,","))
+                      X3=Val(StringField(Temp$,5,","))
+                      Y3=Val(StringField(Temp$,6,","))
+                      R2=Val(StringField(Temp$,7,","))
+                      R3=Val(StringField(Temp$,8,","))
+                    EndIf
+                    If (R2=0 And X2=7) Or (R2=1 And Y2=7) Or (R3=0 And X3>5) Or (R3=1 And Y3>5)
+                      Continue
+                    Else
+                      ClearMap(Occ())
+                      Occ(Str(X1)+Str(Y1))=0
+                      Occ(Str(X2)+Str(Y2))=0
+                      If R2=0
+                        Occ(Str(X2+1)+Str(Y2))=0
+                      Else
+                        Occ(Str(X2)+Str(Y2+1))=0
+                      EndIf
+                      Occ(Str(X3)+Str(Y3))=0
+                      If R3=0
+                        Occ(Str(X3+1)+Str(Y3))=0
+                        Occ(Str(X3+2)+Str(Y3))=0
+                      Else
+                        Occ(Str(X3)+Str(Y3+1))=0
+                        Occ(Str(X3)+Str(Y3+2))=0
+                      EndIf
+                      If MapSize(Occ())=6
+                        FirstElement(Tiles())
+                        FirstElement(Tiles()\Position())
+                        Tiles()\Position()\X=X1
+                        Tiles()\Position()\Y=Y1
+                        NextElement(Tiles())
+                        FirstElement(Tiles()\Position())
+                        Tiles()\Position()\X=X2
+                        Tiles()\Position()\Y=Y2
+                        Tiles()\Position()\Rot=R2
+                        NextElement(Tiles())
+                        FirstElement(Tiles()\Position())
+                        Tiles()\Position()\X=X3
+                        Tiles()\Position()\Y=Y3
+                        Tiles()\Position()\Rot=R3
+                        Solutions=Solve(1)
+                        If Solutions>0
+                          Perc=(R3+R2*2+Y3*4+X3*32+Y2*256+X2*2048+Y1*16384+X1*131072)/10485.76
+                          Found+1
+                          Puzzle=Val("4"+Str(X1)+Str(Y1)+Str(X2)+Str(Y2)+Str(R2)+Str(X3)+Str(Y3)+Str(R3))
+                          WriteStringN(File,"$"+RSet(Hex(Puzzle),8,"0"))
+                        EndIf
+                      EndIf
+                    EndIf
+                    If StopGenerator
+                      FileSeek(File,0)
+                      WriteString(File,Str(X1)+","+Str(Y1)+","+Str(X2)+","+Str(Y2)+","+Str(X3)+","+Str(Y3)+","+Str(R2)+","+Str(R3)+",")
+                      Break 8
+                    EndIf
+                  Next
+                Next
+              Next
+            Next
+          Next
+        Next
+      Next
+    Next
+    CloseFile(File)
+  EndIf
+  StopGenerator=#False
+EndProcedure
+Macro WaitGenerator()
+  If IsThread(GThread)
+    StopGenerator=#True
+    While IsThread(GThread)
+      Delay(100)
+    Wend
+  EndIf
+EndMacro
+
 Procedure Settings()
+  Protected OrigSettings.Settings
+  CopyStructure(Settings,OrigSettings,Settings)
   ParseXML(0,PeekS(?Windows,?WindowsEnd-?Windows,#PB_UTF8))
   CreateDialog(0)
+  SetGadgetFont(#PB_Default,FontID(#Font_Standard))
   If Language
     OpenXMLDialog(0,0,"Settings_EN",0,0,0,0,WindowID(#MainWindow))
   Else
@@ -914,19 +1109,52 @@ Procedure Settings()
   DisableWindow(#MainWindow,#True)
   SetGadgetState(#Gadget_NoGradient,Settings\NoGradient&#PB_Checkbox_Checked)
   SetGadgetState(#Gadget_SharpCorners,Settings\SharpCorners&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_ThinBorders,Settings\ThinBorders&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_LightColors,Settings\LightColors&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_NoWinAnimation,Settings\NoWinAnimation&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_RandomOrientation,Settings\RandomOrientation&#PB_Checkbox_Checked)
   Repeat
     Select WaitWindowEvent()
       Case #PB_Event_CloseWindow
+        WaitGenerator()
+        CopyStructure(OrigSettings,Settings,Settings)
+        Draw(0)
         Break
       Case #PB_Event_Gadget
         Select EventType()
           Case #PB_EventType_LeftClick
             Select EventGadget()
+              Case #Gadget_LightColors,#Gadget_NoGradient,#Gadget_SharpCorners,#Gadget_ThinBorders
+                If Not IsThread(GThread)
+                  Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
+                  Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
+                  Settings\ThinBorders=Bool(GetGadgetState(#Gadget_ThinBorders)<>0)
+                  Settings\LightColors=Bool(GetGadgetState(#Gadget_LightColors)<>0)
+                  If Settings\LightColors
+                    SetTileColors(?Color2)
+                  Else
+                    SetTileColors(?Color1)
+                  EndIf
+                  Draw(0)
+                EndIf
               Case #Gadget_Cancel
+                WaitGenerator()
+                CopyStructure(OrigSettings,Settings,Settings)
+                Draw(0)
                 Break
               Case #Gadget_Save
+                WaitGenerator()
                 Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
                 Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
+                Settings\ThinBorders=Bool(GetGadgetState(#Gadget_ThinBorders)<>0)
+                Settings\LightColors=Bool(GetGadgetState(#Gadget_LightColors)<>0)
+                Settings\NoWinAnimation=Bool(GetGadgetState(#Gadget_NoWinAnimation)<>0)
+                Settings\RandomOrientation=Bool(GetGadgetState(#Gadget_RandomOrientation)<>0)
+                If Settings\LightColors
+                  SetTileColors(?Color2)
+                Else
+                  SetTileColors(?Color1)
+                EndIf
                 SaveProgress()
                 Draw(0)
                 Break
@@ -934,21 +1162,22 @@ Procedure Settings()
         EndSelect
     EndSelect
   ForEver
+  WaitGenerator()
   DisableWindow(#MainWindow,#False)
   SetActiveWindow(#MainWindow)
   FreeDialog(0)
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,780,630,"PureMondrian 1.5.0",#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+OpenWindow(#MainWindow,0,0,840,630,"PureMondrian "+#Version,#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
 
 ;{ Tile creation macro
-Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor,MyFixed=#False)
+Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor=#Black,MyFixed=#False)
   AddElement(Tiles())
   Tiles()\X=MyX
   Tiles()\Y=MyY
   Tiles()\InitX=MyInitX
   Tiles()\InitY=MyInitY
-  Tiles()\Color=RGBA(Red(MyColor),Green(MyColor),Blue(MyColor),255)
+  Tiles()\Color=MyColor|$FF000000;RGBA(Red(MyColor),Green(MyColor),Blue(MyColor),255)
   Tiles()\Fixed=MyFixed
 EndMacro
 ;}
@@ -960,7 +1189,7 @@ CompilerElse
   Background = Point(0,0)
   StopDrawing()
 CompilerEndIf
-Background=RGBA(Red(Background),Green(Background),Blue(Background),255)
+Background=Background|$FF000000;RGBA(Red(Background),Green(Background),Blue(Background),255)
 If 0.299*Red(Background)+0.587*Green(Background)+0.114*Blue(Background)<=186
   Color("Text")=#White|$FF000000
   Color("Border")=#Cyan|$FF000000
@@ -977,29 +1206,16 @@ Else
 EndIf
 ;}
 ;{ Create remaining tiles
-CreateTile(4,3,6,3,#Blue)
-CreateTile(3,3,3,3,#Cyan)
-CreateTile(5,2,6,1,#Red)
-CreateTile(4,2,2,1,#Cyan)
-CreateTile(3,2,0,3,#Red)
-CreateTile(2,2,0,1,#Cyan)
-CreateTile(5,1,0,0,#Yellow)
-CreateTile(4,1,5,0,#Yellow)
+CreateTile(4,3,6,3)
+CreateTile(3,3,3,3)
+CreateTile(5,2,6,1)
+CreateTile(4,2,2,1)
+CreateTile(3,2,0,3)
+CreateTile(2,2,0,1)
+CreateTile(5,1,0,0)
+CreateTile(4,1,5,0)
 ;}
-
-SetGadgetFont(#PB_Default,FontID(LoadFont(#PB_Any,"Verdana",10,#PB_Font_HighQuality)))
-CanvasGadget(#Canvas,0,0,400,WindowHeight(#MainWindow)-54,#PB_Canvas_Keyboard|Bool(#PB_Compiler_OS=#PB_OS_Windows)*#PB_Canvas_ClipMouse)
-CanvasGadget(#CanvasTools,0,WindowHeight(#MainWindow)-54,400,54)
-StartDrawing(CanvasOutput(#Canvas))
-Box(0,0,OutputWidth(),OutputHeight(),Background)
-StopDrawing()
-ButtonImageGadget(#InfoButton,400,0,40,40,ImageID(CatchImage(#PB_Any,?I_Info)))
-CanvasGadget(#Progress,440,0,300,40)
-ButtonImageGadget(#RandomButton,740,0,40,40,ImageID(CatchImage(#PB_Any,?I_Dice)))
-ListIconGadget(#List,400,40,380,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
-SetGadgetAttribute(#List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
-GadgetToolTip(#InfoButton,"Information")
-GadgetToolTip(#RandomButton,"Zufälliges Puzzle")
+;{ Load Images
 CatchImage(#Image_About,?I_About)
 CatchImage(#Image_Language,?I_Language)
 CatchImage(#Image_Settings,?I_Settings)
@@ -1012,22 +1228,19 @@ CatchImage(#Image_Rotate,?I_Rotate)
 CatchImage(#Image_ARotate,?I_ARotate)
 CatchImage(#Image_Solve,?I_Magic)
 CatchImage(#Image_Reset,?I_Refresh)
+CatchImage(#Image_Dice,?I_Dice)
+ResizeImage(#Image_Dice,16,16,#PB_Image_Smooth)
 BlackWhite(#Image_RotateBW,?I_Rotate)
 BlackWhite(#Image_ARotateBW,?I_ARotate)
 BlackWhite(#Image_SolveBW,?I_Magic)
 BlackWhite(#Image_ResetBW,?I_Refresh)
-DrawTools()
-LoadPuzzles()
-LoadProgress()
-LoadNextPuzzle()
-Progress()
-DrawProgress()
-
+;}
 ;{ Create menus
 CreatePopupImageMenu(#Menu_DE)
 MenuItem(1,"Switch to English",ImageID(#Image_Language))
 MenuItem(2,"Wie man spielt",ImageID(#Image_Control))
 MenuItem(3,"Einstellungen",ImageID(#Image_Settings))
+;MenuItem(6,"Puzzle-Generator",ImageID(#Image_Dice))
 MenuBar()
 MenuItem(4,"Über dieses Spiel",ImageID(#Image_About))
 MenuItem(5,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
@@ -1036,10 +1249,37 @@ CreatePopupImageMenu(#Menu_EN)
 MenuItem(1,"Zu Deutsch wechseln",ImageID(#Image_Language))
 MenuItem(2,"How to play",ImageID(#Image_Control))
 MenuItem(3,"Settings",ImageID(#Image_Settings))
+;MenuItem(6,"Puzzle generator",ImageID(#Image_Dice))
 MenuBar()
 MenuItem(4,"About this game",ImageID(#Image_About))
 MenuItem(5,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
 ;}
+
+SetGadgetFont(#PB_Default,FontID(LoadFont(#PB_Any,"Verdana",10,#PB_Font_HighQuality)))
+CanvasGadget(#Gadget_Canvas,0,0,400,WindowHeight(#MainWindow)-54,#PB_Canvas_Keyboard|Bool(#PB_Compiler_OS=#PB_OS_Windows)*#PB_Canvas_ClipMouse)
+CanvasGadget(#Gadget_CanvasTime,0,WindowHeight(#MainWindow)-54,180,54)
+CanvasGadget(#Gadget_CanvasTools,180,WindowHeight(#MainWindow)-54,200,54)
+StartDrawing(CanvasOutput(#Gadget_Canvas))
+Box(0,0,OutputWidth(),OutputHeight(),Background)
+StopDrawing()
+ButtonImageGadget(#Gadget_InfoButton,400,0,40,40,ImageID(CatchImage(#PB_Any,?I_Info)))
+CanvasGadget(#Gadget_Progress,440,0,360,40)
+ButtonImageGadget(#Gadget_RandomButton,800,0,40,40,ImageID(CatchImage(#PB_Any,?I_Dice)))
+ListIconGadget(#Gadget_List,400,40,440,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
+SetGadgetAttribute(#Gadget_List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
+GadgetToolTip(#Gadget_InfoButton,"Information")
+GadgetToolTip(#Gadget_RandomButton,"Zufälliges Puzzle")
+DrawTools()
+LoadPuzzles()
+LoadProgress()
+If Settings\LightColors
+  SetTileColors(?Color2)
+Else
+  SetTileColors(?Color1)
+EndIf
+LoadNextPuzzle()
+Progress()
+DrawProgress()
 
 AddWindowTimer(#MainWindow,1,100)
 AddKeyboardShortcut(#MainWindow,458859,999)
@@ -1054,9 +1294,9 @@ Repeat
         Case 1
           Language=1-Language
           If Language
-            GadgetToolTip(#RandomButton,"Random puzzle")
+            GadgetToolTip(#Gadget_RandomButton,"Random puzzle")
           Else  
-            GadgetToolTip(#RandomButton,"Zufälliges Puzzle")
+            GadgetToolTip(#Gadget_RandomButton,"Zufälliges Puzzle")
           EndIf
           SaveProgress()
           DrawProgress()
@@ -1083,6 +1323,15 @@ Repeat
             CompilerCase #PB_OS_MacOS
               RunProgram("open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
           CompilerEndSelect
+        Case 6;Puzzle generator -> DON'T USE THIS CODE!!!
+          If IsThread(GThread)
+            StopGenerator=#True
+            While IsThread(GThread)
+              Delay(100)
+            Wend
+          Else
+            GThread=CreateThread(@Generator(),0)
+          EndIf
         Case 999
           SolveMode=1-SolveMode
           DrawTools()
@@ -1091,19 +1340,19 @@ Repeat
       Select EventTimer()
         Case 1
           If Timer
-            DrawTools()
+            DrawTime()
           EndIf
       EndSelect
     Case #PB_Event_Gadget
       Select EventType()
         Case #PB_EventType_LeftClick
           Select EventGadget()
-            Case #InfoButton
+            Case #Gadget_InfoButton
               DisplayPopupMenu(Language,WindowID(#MainWindow))
-            Case #RandomButton
-              SetGadgetState(#List,Random(CountGadgetItems(#List)-1))
-              PostEvent(#PB_Event_Gadget,#MainWindow,#list,#PB_EventType_Change)
-            Case #CanvasTools
+            Case #Gadget_RandomButton
+              SetGadgetState(#Gadget_List,Random(CountGadgetItems(#Gadget_List)-1))
+              PostEvent(#PB_Event_Gadget,#MainWindow,#Gadget_List,#PB_EventType_Change)
+            Case #Gadget_CanvasTools
               Select Tool
                 Case 1;Solve
                   If Language
@@ -1116,7 +1365,7 @@ Repeat
                   SolveMode=#False
                   EndIf
                 Case 2;Reset
-                  PostEvent(#PB_Event_Gadget,#MainWindow,#List,#PB_EventType_Change)
+                  PostEvent(#PB_Event_Gadget,#MainWindow,#Gadget_List,#PB_EventType_Change)
                 Case 3;ARotate
                   Rotate(0)
                 Case 4;Rotate
@@ -1125,14 +1374,14 @@ Repeat
           EndSelect
         Case #PB_EventType_LeftButtonDown  
           Select EventGadget()
-            Case #Canvas
+            Case #Gadget_Canvas
               If Not Solved
                 If InitTimer=0
                   InitTimer=ElapsedMilliseconds()
                 EndIf
                 Y=#True
-                MX=Round((DesktopUnscaledX(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseX))-61)/40,#PB_Round_Nearest)
-                MY=Round((DesktopUnscaledY(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseY))-61)/40,#PB_Round_Nearest)
+                MX=Round((DesktopUnscaledX(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseX))-61)/40,#PB_Round_Nearest)
+                MY=Round((DesktopUnscaledY(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseY))-61)/40,#PB_Round_Nearest)
                 If MX>=0 And MY>=0 And MX<=7 And MY<=7
                   X=Field(MX,MY)
                   If X>2
@@ -1150,8 +1399,8 @@ Repeat
                   EndIf
                 EndIf
                 If Y  
-                  MX=DesktopUnscaledX(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseX))
-                  MY=DesktopUnscaledY(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseY))
+                  MX=DesktopUnscaledX(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseX))
+                  MY=DesktopUnscaledY(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseY))
                   ForEach Tiles()
                     If MX>=Tiles()\DragX And MX<=Tiles()\DragX+Tiles()\DragW And MY>=Tiles()\DragY And MY<=Tiles()\DragY+Tiles()\DragH And Tiles()\NowX=-1
                       DragTile=ListIndex(Tiles())
@@ -1165,11 +1414,11 @@ Repeat
           EndSelect
         Case #PB_EventType_LeftButtonUp  
           Select EventGadget()
-            Case #Canvas
+            Case #Gadget_Canvas
               If Not Solved
                 If DragTile>-1 And Not NoDrop
-                  MX=DesktopUnscaledX(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseX))
-                  MY=DesktopUnscaledY(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseY))
+                  MX=DesktopUnscaledX(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseX))
+                  MY=DesktopUnscaledY(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseY))
                   SelectElement(Tiles(),DragTile)
                   If Tiles()\DragRot
                     X=MX-0.8*Tiles()\DragH
@@ -1207,9 +1456,9 @@ Repeat
                   EndTimer=ElapsedMilliseconds()
                   Solved=#True
                   Draw(#False)
-                  *Puzzle=GetGadgetItemData(#List,GetGadgetState(#List))
+                  *Puzzle=GetGadgetItemData(#Gadget_List,GetGadgetState(#Gadget_List))
                   *Puzzle\State=#True
-                  SetGadgetItemImage(#List,GetGadgetState(#list),ImageID(*Puzzle\DoneImage))
+                  SetGadgetItemImage(#Gadget_List,GetGadgetState(#Gadget_List),ImageID(*Puzzle\DoneImage))
                   Timer=2
                   If EndTimer-InitTimer<*Puzzle\BestTime Or *Puzzle\BestTime=0
                     *Puzzle\BestTime=EndTimer-InitTimer
@@ -1221,40 +1470,48 @@ Repeat
                   DrawTools()
                   DrawProgress()
                   SaveProgress()
-                  WinThread=CreateThread(@Animation(),WinAnim)
+                  If Not Settings\NoWinAnimation
+                    WinThread=CreateThread(@Animation(),WinAnim)
+                  EndIf
+                ElseIf X=3
+                  InitTimer=0
                 EndIf
               EndIf
-            Case #Progress
-              If ProgButton>=0 And ProgButton<=3 And ProgButton<>Difficulty And (ProgButton=0 Or PProgress(ProgButton-1)>=0.5*TCount(ProgButton-1))
+            Case #Gadget_Progress
+              If ProgButton>=0 And ProgButton<=4 And ProgButton<>Difficulty And (ProgButton=0 Or (ProgButton=4 And #Custom_Enable=#True And TCount(4)>0) Or PProgress(ProgButton-1)>=0.5*TCount(ProgButton-1))
                 LoadList(ProgButton)
+                Solved=#True
+                Timer=1
+                BestTime=0
+                InitTimer=0
                 Difficulty=ProgButton
               EndIf
           EndSelect
         Case #PB_EventType_MouseMove
           Select EventGadget()
-            Case #Canvas
+            Case #Gadget_Canvas
               If DragTile<>-1
                 Draw(#False)
               EndIf
-            Case #CanvasTools
+            Case #Gadget_CanvasTools
               DrawTools()
-            Case #Progress
+            Case #Gadget_Progress
               DrawProgress()
           EndSelect
         Case #PB_EventType_MouseEnter,#PB_EventType_MouseLeave
           Select EventGadget()
-            Case #CanvasTools
+            Case #Gadget_CanvasTools
               DrawTools()
-            Case #Progress
+            Case #Gadget_Progress
               DrawProgress()
           EndSelect
         Case #PB_EventType_RightClick
           Select EventGadget()
-            Case #Canvas
+            Case #Gadget_Canvas
               If DragTile=-1
                 If Not Solved
-                  MX=Round((DesktopUnscaledX(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseX))-61)/40.0,#PB_Round_Nearest)
-                  MY=Round((DesktopUnscaledY(GetGadgetAttribute(#Canvas,#PB_Canvas_MouseY))-61)/40.0,#PB_Round_Nearest)
+                  MX=Round((DesktopUnscaledX(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseX))-61)/40.0,#PB_Round_Nearest)
+                  MY=Round((DesktopUnscaledY(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_MouseY))-61)/40.0,#PB_Round_Nearest)
                   If MX>=0 And MY>=0 And MX<=7 And MY<=7
                     X=Field(MX,MY)
                     If X>2
@@ -1271,6 +1528,16 @@ Repeat
                     EndIf
                   EndIf								
                 EndIf
+                X=0
+                ForEach Tiles()
+                  If Not Tiles()\Fixed And Tiles()\NowX<>-1
+                    X=1
+                    Break
+                  EndIf
+                Next
+                If X=0
+                  InitTimer=0
+                EndIf
               Else
                 SelectElement(Tiles(),DragTile)
                 Tiles()\DragRot=1-Tiles()\DragRot
@@ -1279,26 +1546,30 @@ Repeat
           EndSelect
         Case #PB_EventType_MiddleButtonDown
           Select EventGadget()
-            Case #Canvas
+            Case #Gadget_Canvas
               SelectNextTile(#False)
           EndSelect
         Case #PB_EventType_MouseWheel
           Select EventGadget()
-            Case #Canvas
-              SelectNextTile(Bool(GetGadgetAttribute(#Canvas,#PB_Canvas_WheelDelta)<0))
+            Case #Gadget_Canvas
+              SelectNextTile(Bool(GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_WheelDelta)<0))
           EndSelect
         Case #PB_EventType_Change
           Select EventGadget()
-            Case #List
-              If GetGadgetState(#List)=-1
-                StartVectorDrawing(CanvasVectorOutput(#Canvas))
+            Case #Gadget_List
+              If GetGadgetState(#Gadget_List)=-1
+                LockMutex(DrawVectorMutex)
+                StartVectorDrawing(CanvasVectorOutput(#Gadget_Canvas))
                 VectorSourceColor(Background)
                 FillVectorOutput()
                 StopVectorDrawing()
                 Solved=#True
-                Timer=0
+                Timer=1
+                BestTime=0
+                InitTimer=0
+                UnlockMutex(DrawVectorMutex)
               Else
-                *Puzzle=GetGadgetItemData(#List,GetGadgetState(#List))
+                *Puzzle=GetGadgetItemData(#Gadget_List,GetGadgetState(#Gadget_List))
                 LoadPuzzle(*Puzzle)
                 Draw(#False)
                 InitTimer=0
@@ -1310,10 +1581,10 @@ Repeat
           EndSelect
         Case #PB_EventType_KeyDown
           Select EventGadget()
-            Case #Canvas
-              Select GetGadgetAttribute(#Canvas,#PB_Canvas_Key)
+            Case #Gadget_Canvas
+              Select GetGadgetAttribute(#Gadget_Canvas,#PB_Canvas_Key)
                 Case #PB_Shortcut_R
-                  PostEvent(#PB_Event_Gadget,#MainWindow,#Canvas,#PB_EventType_RightClick)
+                  PostEvent(#PB_Event_Gadget,#MainWindow,#Gadget_Canvas,#PB_EventType_RightClick)
                 Case #PB_Shortcut_S
                   SelectNextTile(#False)
                 Case #PB_Shortcut_A
@@ -1346,6 +1617,8 @@ DataSection;Predefined puzzles
   Data.l $13DF9AD6,$152030E0,$14662B01,$135F6C4F,$150F8F10,$148502B4,$133770FF,$1365B005,$135B029E,$133244E4,$136ED6DE
   Data.l $1400D994,$150F9082,$13418508,$13564286,$14983C58,$132AA1A8,$146AC585,$1496DCB4,$14FBB473,$13368663,$13E4CB14
   Data.l $148B4201,$134187D9,$148B41ED,$151D6F22,$14EBDAD4,$14475D9C,$1388A028,$13D22D56,$1495CC5C,$13EF9B85,$13D27A9A
+  ;Custom -> Only for testing purposes (at least in this version)!
+  Data.l $17D7AB24,$17D7AB25,$17D7AF16,$17D7AF17,$17D7AB38,$17D7AB39,$17D7AF20,$17D7AB42,$17D7AB43,$17D7AF2A,$17D7AF2B
   PuzzlesEnd:
 EndDataSection
 DataSection;Icons (all icons are distributed under licenses which allow me to use them for non-commercial projects!)
@@ -1378,4 +1651,25 @@ DataSection;Icons (all icons are distributed under licenses which allow me to us
 EndDataSection
 DataSection;More data...
   Windows: : IncludeBinary "Mondrian.xml" : WindowsEnd:
+  Color1:
+  Data.l #Blue,#Cyan,#Red,#Cyan,#Red,#Cyan,#Yellow,#Yellow
+  Color2:
+  Data.l $FF8989,$59FF6F,$3E4EFF,#Cyan,$FF68EA,$689EFF,#Yellow,#Yellow
 EndDataSection
+
+; IDE Options = PureBasic 6.11 LTS (Windows - x64)
+; CursorPosition = 109
+; Folding = AAAAAAAAAAAAAAAAAIAAAAA+
+; Optimizer
+; EnableAsm
+; EnableThread
+; EnableXP
+; DPIAware
+; EnableOnError
+; CPU = 1
+; SubSystem = DirectX11
+; CompileSourceDirectory
+; Compiler = 
+; EnablePurifier
+; EnableCompileCount = 0
+; EnableBuildCount = 0
