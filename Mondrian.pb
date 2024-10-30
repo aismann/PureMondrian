@@ -1,4 +1,4 @@
-﻿;PureMondrian 1.5.1 by Jac de Lad
+﻿;PureMondrian 1.5.2 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -42,6 +42,7 @@ Enumeration Images
   #Image_About
   #Image_Dice
   #Image_Settings
+  #Image_RotateTile
 EndEnumeration
 Enumeration Menus
   #Menu_DE
@@ -105,16 +106,22 @@ Structure Settings
   LightColors.a
   NoWinAnimation.a
   RandomOrientation.a
+  WindowX.l
+  WindowY.l
+EndStructure
+Structure Lang
+  Name$
+  Map Entry$()
 EndStructure
 
-#Version          = "1.5.1"
+#Version          = "1.5.3"
 #AutoSolve_Enable = #False
 #AutoSolve_Time   = 60000
 #Custom_Enable    = #False
 
 Global.i Thread,DrawVectorMutex=CreateMutex(),DrawMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,GThread
 Global.l Background,BestTime,Button
-Global.a Language=1,Solved=#True,NoDrop,Tool,Timer,SolveMode,Progress,DarkTheme,Difficulty,StopGenerator
+Global.a Language=1,Solved=#True,NoDrop,Tool,Timer,SolveMode,Progress,DarkTheme,Difficulty,StopGenerator,InRotation
 Global.b DragTile=-1,ProgButton=-1
 Global.w MX,MY,X,Y
 Global.q InitTimer,EndTimer
@@ -122,16 +129,16 @@ Global Dim PProgress.w(4),Dim TCount.w(4),Dim Field.a(7,7)
 Global SaveDir$=GetUserDirectory(#PB_Directory_ProgramData)+"PureMondrian"+#PS$,SaveFile$=SaveDir$+"PureMondrian.dat",SettingsFile$=SaveDir$+"PureMondrian.cfg"
 Global.Puzzle *Puzzle
 Global.Settings Settings
-Global NewList Tiles.Tile(),NewList PositionMatrix.MPos(),NewList Puzzles.Puzzle()
+Global NewList Tiles.Tile(),NewList PositionMatrix.MPos(),NewList Puzzles.Puzzle(),NewList Languages.Lang()
 Global NewMap Color.l()
 If Not FileSize(SaveDir$)=-2
   CreateDirectory(SaveDir$)
 EndIf
 ;{ Loading Fonts
-LoadFont(#Font_Standard,"Verdana",10,#PB_Font_HighQuality)
-LoadFont(#Font_Vector,"Courier New",40,#PB_Font_Bold|#PB_Font_HighQuality)
-LoadFont(#Font_Progress,"Verdana",10,#PB_Font_Bold|#PB_Font_HighQuality)
-LoadFont(#Font_Progress2,"Verdana",8,#PB_Font_HighQuality)
+LoadFont(#Font_Standard ,"Verdana"    ,10,#PB_Font_HighQuality)
+LoadFont(#Font_Progress ,"Verdana"    ,10,#PB_Font_HighQuality|#PB_Font_Bold)
+LoadFont(#Font_Vector   ,"Courier New",40,#PB_Font_HighQuality|#PB_Font_Bold)
+LoadFont(#Font_Progress2,"Verdana"    , 8,#PB_Font_HighQuality)
 ;}
 
 Procedure SetTileColors(*Colors)
@@ -233,6 +240,16 @@ Procedure Draw(Mode)
     PopListPosition(Tiles())
     MX=DesktopUnscaledX(WindowMouseX(#MainWindow))
     MY=DesktopUnscaledY(WindowMouseY(#MainWindow))
+    
+    If MX>=VectorOutputWidth()-65 And MY>=VectorOutputHeight()-65
+      If Not InRotation
+        InRotation=#True
+        Tiles()\DragRot=#True-Tiles()\DragRot
+      EndIf
+    Else
+      InRotation=#False
+    EndIf
+    
     If Tiles()\DragRot
       X=MX-0.8*Tiles()\DragH
       Y=MY-0.8*Tiles()\DragW
@@ -275,6 +292,8 @@ Procedure Draw(Mode)
     StrokePath(2-Settings\ThinBorders)
   EndIf
   
+  MovePathCursor(VectorOutputWidth()-65,VectorOutputHeight()-65,#PB_Path_Default)
+  DrawVectorImage(ImageID(#Image_RotateTile))
   StopVectorDrawing()
   UnlockMutex(DrawVectorMutex)
 EndProcedure
@@ -542,11 +561,7 @@ Procedure Solve(Mode=0)
           Tiles()\RPosition+1
         Else
           If Not Mode
-            If Language
-              MessageRequester("Error","There was no solution found!",#PB_MessageRequester_Error)
-            Else
-              MessageRequester("Fehler","Es konnte keine Lösung gefunden werden!",#PB_MessageRequester_Error)
-            EndIf
+            ;MessageRequester(Lang(0),Lang(1),#PB_MessageRequester_Error);Error -> There was no solution found!
           EndIf
           error=#True
           Break 2
@@ -869,6 +884,8 @@ Procedure LoadProgress()
     If FS>=4:Settings\ThinBorders=ReadByte(File):EndIf
     If FS>=5:Settings\NoWinAnimation=ReadByte(File):EndIf
     If FS>=6:Settings\RandomOrientation=ReadByte(File):EndIf
+    If FS>=7:Settings\WindowX=ReadLong(File):EndIf
+    If FS>=11:Settings\WindowY=ReadLong(File):EndIf
     CloseFile(File)
   EndIf
   If FileSize(SaveFile$)>=0
@@ -898,6 +915,8 @@ Procedure SaveProgress()
     WriteByte(File,Settings\ThinBorders)
     WriteByte(File,Settings\NoWinAnimation)
     WriteByte(File,Settings\RandomOrientation)
+    WriteLong(File,Settings\WindowX)
+    WriteLong(File,Settings\WindowY)
     CloseFile(File)
   EndIf
   File=CreateFile(#PB_Any,SaveFile$)
@@ -1168,7 +1187,7 @@ Procedure Settings()
   FreeDialog(0)
 EndProcedure
 
-OpenWindow(#MainWindow,0,0,840,630,"PureMondrian "+#Version,#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget)
+OpenWindow(#MainWindow,0,0,840,630,"PureMondrian "+#Version,#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget|#PB_Window_Invisible)
 
 ;{ Tile creation macro
 Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor=#Black,MyFixed=#False)
@@ -1255,6 +1274,7 @@ MenuItem(4,"About this game",ImageID(#Image_About))
 MenuItem(5,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
 ;}
 
+CatchImage(#Image_RotateTile,?I_RotTile)
 SetGadgetFont(#PB_Default,FontID(LoadFont(#PB_Any,"Verdana",10,#PB_Font_HighQuality)))
 CanvasGadget(#Gadget_Canvas,0,0,400,WindowHeight(#MainWindow)-54,#PB_Canvas_Keyboard|Bool(#PB_Compiler_OS=#PB_OS_Windows)*#PB_Canvas_ClipMouse)
 CanvasGadget(#Gadget_CanvasTime,0,WindowHeight(#MainWindow)-54,180,54)
@@ -1272,6 +1292,8 @@ GadgetToolTip(#Gadget_RandomButton,"Zufälliges Puzzle")
 DrawTools()
 LoadPuzzles()
 LoadProgress()
+ResizeWindow(#MainWindow,Settings\WindowX,Settings\WindowY,#PB_Ignore,#PB_Ignore)
+HideWindow(#MainWindow,#False)
 If Settings\LightColors
   SetTileColors(?Color2)
 Else
@@ -1477,6 +1499,7 @@ Repeat
                   InitTimer=0
                 EndIf
               EndIf
+              InRotation=#False
             Case #Gadget_Progress
               If ProgButton>=0 And ProgButton<=4 And ProgButton<>Difficulty And (ProgButton=0 Or (ProgButton=4 And #Custom_Enable=#True And TCount(4)>0) Or PProgress(ProgButton-1)>=0.5*TCount(ProgButton-1))
                 LoadList(ProgButton)
@@ -1594,6 +1617,9 @@ Repeat
       EndSelect
   EndSelect
 ForEver
+Settings\WindowX=WindowX(#MainWindow)
+Settings\WindowY=WindowY(#MainWindow)
+SaveProgress()
 
 DataSection;Predefined puzzles
   Puzzles:
@@ -1643,8 +1669,13 @@ DataSection;Icons (all icons are distributed under licenses which allow me to us
   I_Settings: : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449EA01000061,$D4002F7062DA7854,$EF1451848A9E064D,$32D594BFD1E2586F,$25110A4910B4953C,$AA495336AF204A88,$2A90841555108A2A,$E0020281500A1044,$CCE9F8510CAE77EC,$BEB18D7EEFDEE7B9,$4FEA100AEBAF5EA5,$615BF2A54A8797B9,$FA810F1E3C0A6856,$54A03B79FC52FDE9,$6CE272264C9BFD2A,$1478F1C3B76EC336,$53A74C356AD5E9A8,$6BCF9F2032FEACA8,$F3E70DDBB710E1C3,$AB01C38705CB9719,$7EFDDAC7A6888AD5,$1932640631ECB307,$76C7BF7EC458B14B,$7CF98162C5A695BB,$D966198D63D3444E,$B76E8ED3A7480C63,$66DD6515C972E58B,$66358F4D4090C9B3,$BAE3C7880C8F6598,$AD5AA11A347138C2,$C7A6A10B0A3F7942,$468A6E89D62373DA,$3060E2B2AF5EB8A3,$3CCDF2A2963C78C0,$D966198D63D35081,$B366C21428535EC3,$2C6AB26AE7DFBF41,$58F4D4018DF28316,$F7E4D7B0F6598663,$FE55DE18FF0575FB,$BE28FDE501A346E1,$B30CC0AF2F5F3508,$1C78F1E09CAF61EC,$4E9D0B56AD024489,$8409E06C1AF5EB07,$8499324CC6B1E903,$9B76EDC16F1971EA,$E5CA36EDDA2F5EBD,$3A74F3DC9EBD7A32,$F3E7C66358F4D111,$BB76EC03197CF541,$2CD9B2FDC94A9523,$CD4267C06C82850A,$DF3D55B733E359B5,$44891E9A69A200C6,$4DE4040810B972E0,$C20C183A223972E4,$B7D9830E1C2274E9,$28B0ABFB66CD931F,$667A7EA0553C15BE,$AD5AB05F1AFA7EFE,$A63FEE53FA8402BA,$00F510D56522461B,$AE444E4549000000:Data.b $42,$60,$82
   ;The following icons are used form the icon set "Glyphish Icons": https://www.iconarchive.com/show/glyphish-icons-by-glyphish.html and https://www.glyphish.com/
   I_Control:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$FFF31F0000000608,$414449BC00000061,$83082F93DDDA7854,$B760F7B1D7C61440,$6165EB9ACB0459AE,$F63AE327B06EB2C1,$0B3B3D7B75C3AE1E,$E38F0BF07BDB860B,$EEF8E3F0B1958C64,$2BE9DBDA1E2883FB,$08785E9A69A0687E,$8BB8E04C2704D851,$53D31AE5A03B7A64,$31981DB57AC868F0,$6708BCA4FA70210A,$08503D656076CDE3,$55EAA723E51308E8,$82827BBD092E5ABB,$47C43A0752BC62F2,$4E2910181D3A00EF,$26303A0CC9DB83B8,$F0EF5BDFA6D09B97,$A2D16C5C0DCC61A2,$BC25709E12A06E5E,$E99F83FABE4C668B,$6A8D5B3947EDD405,$4E45490000000045:Data.b $44,$AE,$42,$60,$82
+  ;The following icons are used form the icon set "Material Design Icons Pack": https://www.iconarchive.com/show/material-icons-by-pictogrammers.html
+  ;The following icon was adapted in color:
+  I_RotTile:  : Data.q $0A1A0A0D474E5089,$524448490D000000,$4000000040000000,$7169AA0000000608,$59487009000000DE,$0B0000130B000073,$0000189C9A000113,$DA7854414449A602,$C71441146B319BED,$8888C5062872677F,$44D3514ED181E0A8,$F0541452AE110410,$891A67676228D813,$823C2D6C39007E85,$5A28DA2168AB6084,$C60A22C6D5D06888,$638A6E2CF77722C6,$6E666DCC9DDBD9BD,$FDF7767659AF0FE6,$1510B3B337DBCDE6,$0731A37596B6A2E5,$F3D8843E00559F9D,$F8E1BACB170080B3,$2D400B81A60413A0,$2B8F029E02FCC447,$215D3396FE7032D0,$A0A4047408681550,$3B2979E8329817BD,$B5EF1C0C3400B202,$400FEBF3819B6044,$E06736D3E7B0DA60,$022F382CE60013BC,$966B04913BCE064B,$5FC033784C335FAE,$047651F80DF027E0,$75E7B0520114B23C,$3E3D80D7022C0CB6,$09E02D6D3E713003,$B02F605B002BDA70,$FA8E073DAF400162,$DC0AB08043330114,$10406180E4BEAA06,$20790007D3B005E0,$E039C0838026025C,$DE56CF840729F02E,$0757410418002560,$2F84064E8016009C,$54184164001F6EC0,$037840663E049D08,$4A9E420E8001F66C,$2F81E10198780270,$54570A5BC841FA00,$34800BE33841D07E,$5F001AFB8173A284,$1AB438370D594D81,$5EDA0C7F03A80AF4,$12F8AE45CDFBED55,$407768375091BD01,$CACF3DF051D2A04D,$A19A3BA2D6004B97,$54F743602187D670,$C0CB00143975A414,$A8EE82DD75E39F7C,$0A14381260034001,$2848EB4E54AA6780,$50A9AD3FFBD45600,$1215DAD311D6A000,$36003043B99ADF80,$9A1D80121AB639F6,$6BC01447C69FF0DC,$AE004865EAF70255,$4011008754713DE7,$7AE6C00BB8011004,$FF33EA4B025AC683,$6E07EC0630118864,$043084EBB6B36F02,$9287E579A2F301F6,$A7824F43E7030E03,$589500743DB00742,$0110044011004407,$BF5D2DB400F90044,$4B120022EDAF90ED,$D0011490021C4D37,$4BCE23A6EDA7CEC4,$AC25130FE61967E1,$BF2D6C8261ADA407,$06759C7CEE93BCCC,$A9C7D50B543E51D0,$4B0D52D377463D87,$390F8E00DC094D3F,$1833DDD2B34025E1,$00FF4FD515151515,$B2244E4761689AC2,$444E454900000000:Data.b $AE,$42,$60,$82
   
-  ;More icons
+EndDataSection
+  
+DataSection;More icons
   I_About:    : Data.q $0A1A0A0D474E5089,$524448490D000000,$1000000010000000,$6891900000000208,$5948700900000036,$0B0000120B000073,$0000FC7EDDD20112,$DA78544144498502,$DE105D5D7003524C,$6B36DB6FC6CF573D,$CC39563BB6D41CDB,$19E76C66DB6DB6B0,$0FBFAC638C6E5E99,$000C04000D99CC37,$2D30F71E22FEBA62,$C379EDCFA1228E15,$40323C40471892ED,$A788AF4DCD062224,$5CD82CCB1D166637,$8B11B549F4F0BD14,$41595B9456B95963,$0007B35B8D4120D4,$8A94CD33B5595E7C,$420CCEF0BBE8FC42,$43B192F3D1B08322,$37EA1E4D81BDF13F,$0AC7FDF0ED745440,$02007761A6F7C131,$6BFDFDFE5AB76643,$20029D2468B38802,$91434A888E0D6444,$EF3BD2B56AC264D2,$C06631FC06634A80,$9F4DF0F977E72BDF,$54514CF0BA9FCADB,$A84A6224D4397680,$3997DB3198BD67EA,$D53244F5E8F9BE67,$D2E4FE0FA67787E5,$965DBB0633A789E6,$5E37C0410566C926,$FD4D0C96FC143D7F,$FFFFE3A990ECBFEC,$53C3ED713E57BD9C,$420C515EB81FAFB9,$03D7878B610D4D6E,$6310A99D7C1F57DE,$E63AC2FCFEDBC798,$5535D583EFFFE317,$77FE9C0FEBF9B366,$DCA6F801110513DF,$1E8B241D0C144C2D,$1A11C1D06F2EF30B,$BC5F9FDA72B8BB2E,$605DBE2E61CB7E1B,$E006ACB9B0915873,$FEEFFDE97E576BC1,$592BFBD057CE7E52,$E7ACA4A345000200,$0C921B5488B12995,$A7E3D4180381C96C,$026FCBC67FD27FA9,$0DA508C362181131,$4066C3A5320443B7,$F113766200516A44,$CAD50C505EA96648,$74BCD3DC6DBAB84D,$103C824D408AA666,$007837DDE8032403,$B946004F9EF8EAA6,$6BC1E2417EBBCA55,$1A110084EF58CCE3,$7B90BD19587D4024,$D5318C0800A0CDE7,$9EBB35A059911830,$AE3181CA0B902CBD,$FE4BF2F8645C4B95,$E3DCF979399C1F77,$D3A0BDE551150C98,$4F23C6F263AA156E,$A3424D114CDFA5B3,$B1EBB1DF8C6C2321,$B99E6B86CF53E763,$BDF78C8A7DEF6DAB,$AB365D7B6F47F1FF,$AC6F07B6D712FC77,$F35359E6C8FEDBAF,$69001103171616F2,$00F456DB4DFA2E70,$AE444E4549000000:Data.b $42,$60,$82
   ;Winning animation:
   Win:        : IncludeBinary "Win.anim"
@@ -1657,9 +1688,9 @@ DataSection;More data...
   Data.l $FF8989,$59FF6F,$3E4EFF,#Cyan,$FF68EA,$689EFF,#Yellow,#Yellow
 EndDataSection
 
-; IDE Options = PureBasic 6.11 LTS (Windows - x64)
-; CursorPosition = 109
-; Folding = AAAAAAAAAAAAAAAAAIAAAAA+
+; IDE Options = PureBasic 6.12 LTS (Windows - x64)
+; CursorPosition = 116
+; Folding = AAQAAAAAAAAAAAAAvggAAAA6
 ; Optimizer
 ; EnableAsm
 ; EnableThread
