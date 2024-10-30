@@ -241,7 +241,7 @@ Procedure Draw(Mode)
     MX=DesktopUnscaledX(WindowMouseX(#MainWindow))
     MY=DesktopUnscaledY(WindowMouseY(#MainWindow))
     
-    If MX>=VectorOutputWidth()-65 And MY>=VectorOutputHeight()-65
+    If MX>=VectorOutputWidth()/DesktopResolutionX()-65 And MY>=VectorOutputHeight()/DesktopResolutionX()-65
       If Not InRotation
         InRotation=#True
         Tiles()\DragRot=#True-Tiles()\DragRot
@@ -292,7 +292,7 @@ Procedure Draw(Mode)
     StrokePath(2-Settings\ThinBorders)
   EndIf
   
-  MovePathCursor(VectorOutputWidth()-65,VectorOutputHeight()-65,#PB_Path_Default)
+  MovePathCursor(VectorOutputWidth()/DesktopResolutionX()-65,VectorOutputHeight()/DesktopResolutionX()-65,#PB_Path_Default)
   DrawVectorImage(ImageID(#Image_RotateTile))
   StopVectorDrawing()
   UnlockMutex(DrawVectorMutex)
@@ -418,7 +418,7 @@ Procedure Animation(Anim)
     SetImageFrame(Anim,Frame)
     LockMutex(DrawMutex)
     If GetGadgetState(#Gadget_List)<>-1 And StartDrawing(CanvasOutput(#Gadget_Canvas))
-      DrawImage(ImageID(Anim),0,400,400,214)
+      DrawImage(ImageID(Anim),0,400*DesktopResolutionX(),400*DesktopResolutionX(),214*DesktopResolutionY())
       StopDrawing()
     EndIf
     UnlockMutex(DrawMutex)
@@ -967,46 +967,57 @@ Procedure DrawProgress()
     Diff$="Einfach,Mittel,Schwer,Meister,Custom,Gesamt"
   EndIf
   LockMutex(DrawMutex)
-  StartDrawing(CanvasOutput(#Gadget_Progress))
-  Box(0,0,GadgetWidth(#Gadget_Progress),40,Background)
-  DrawingMode(#PB_2DDrawing_Transparent)
-  DrawingFont(FontID(#Font_Progress))
-  DrawText(30-0.5*TextWidth(Text$),6,Text$,Color("Text"))
-  DrawingFont(FontID(#Font_Progress2))
-  Text$=StringField(Diff$,6,",")
-  DrawText(30-0.5*TextWidth(Text$),22,Text$,Color("Text"))
-  RoundBox(62+Difficulty*60,2,56,36,4,4,#Green)
   
+  StartVectorDrawing(CanvasVectorOutput(#Gadget_Progress))
+  VectorSourceColor(Background)
+  FillVectorOutput()
+  ScaleCoordinates(DesktopResolutionX(), DesktopResolutionY())
+  VectorFont(FontID(#Font_Progress),20/DesktopResolutionX())
+  VectorSourceColor(Color("Text")|$FF000000)
+  MovePathCursor(30-0.5*VectorTextWidth(Text$),6)
+  DrawVectorText(Text$)
+  VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
+  Text$=StringField(Diff$,6,",")
+  MovePathCursor(30-0.5*VectorTextWidth(Text$),22)
+  DrawVectorText(Text$)
+  VectorSourceColor(Color("Text")|$FF000000)
   For Count=0 To 4
-    DrawingFont(FontID(#Font_Progress))
+    VectorFont(FontID(#Font_Progress),20/DesktopResolutionX())
     If (Count=4 And (TCount(4)=0 Or #Custom_Enable=#False)) Or (Count<>4 And (Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)))
-      DrawingMode(#PB_2DDrawing_AlphaBlend)
-      DrawImage(ImageID(#Image_Lock),60*(Count+1)+22,6)
-      DrawingMode(#PB_2DDrawing_Transparent)
-      DrawingFont(FontID(#Font_Progress2))
+      MovePathCursor(60*(Count+1)+22,6)
+      DrawVectorImage(ImageID(#Image_Lock))
+      VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
       Text$=StringField(Diff$,Count+1,",")
-      DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,#Gray)
+      VectorSourceColor(#Gray|$FF000000)
+      MovePathCursor(60*Count+90-0.5*VectorTextWidth(Text$),22)
+      DrawVectorText(Text$)
     Else
-      If ProgButton<>Difficulty And ProgButton=Count
-        DrawingMode(#PB_2DDrawing_Transparent)
-        RoundBox(62+Count*60,2,56,36,4,4,#Gray)
-      EndIf
+      ;       If ProgButton<>Difficulty And ProgButton=Count
+      ;         VectorSourceColor(#Gray|$FF000000)
+      ;         AddPathBox(62+Count*60,2,56,36)
+      ;       EndIf
       If PProgress(Count)=TCount(Count)
-        DrawingMode(#PB_2DDrawing_AlphaBlend)
-        DrawImage(ImageID(#Image_Complete),60*(Count+1)+22,6)
+        MovePathCursor(60*(Count+1)+22,6)
+        DrawVectorImage(ImageID(#Image_Complete))
       Else
-        DrawingMode(#PB_2DDrawing_Transparent)
         Text$=Str(100*PProgress(Count)/TCount(Count))+"%"
-        DrawText(60*(Count+1)+30-0.5*TextWidth(Text$),6,Text$,Color("Text"))
+        VectorSourceColor(Color("Text")|$FF000000)
+        MovePathCursor(60*(Count+1)+30-0.5*VectorTextWidth(Text$),6)
+        DrawVectorText(Text$)
       EndIf
-      DrawingFont(FontID(#Font_Progress2))
-      DrawingMode(#PB_2DDrawing_Transparent)
+      VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
       Text$=StringField(Diff$,Count+1,",")
-      DrawText(60*Count+90-0.5*TextWidth(Text$),22,Text$,Color("Text"))
+      VectorSourceColor(Color("Text")|$FF000000)
+      MovePathCursor(60*Count+90-0.5*VectorTextWidth(Text$),22)
+      DrawVectorText(Text$)
     EndIf
   Next
+  StrokePath(4)
+  VectorSourceColor(#Green|$FF000000)
+  AddPathBox(62+Difficulty*60,2,56,36)
+  StrokePath(4)
+  StopVectorDrawing()
   
-  StopDrawing()
   UnlockMutex(DrawMutex)
 EndProcedure
 
@@ -1690,7 +1701,7 @@ EndDataSection
 
 ; IDE Options = PureBasic 6.12 LTS (Windows - x64)
 ; CursorPosition = 116
-; Folding = AAQAAAAAAAAAAAAAvggAAAA6
+; Folding = AAQAyAAAAgDAAgBAvjgAAAA6
 ; Optimizer
 ; EnableAsm
 ; EnableThread
