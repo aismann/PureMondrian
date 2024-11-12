@@ -1200,7 +1200,7 @@ CatchImage(#Image_Button_Settings,?I_Info)
 ResizeImage(#Image_Button_Settings,ImageWidth(#Image_Button_Settings)*DesktopResolutionX(),ImageHeight(#Image_Button_Settings)*DesktopResolutionY(),#PB_Image_Smooth)
 ButtonImageGadget(#Gadget_OptionButton,400,0,40,40,ImageID(#Image_Button_Settings))
 CanvasGadget(#Gadget_Progress,440,0,360,40)
-CatchImage(#Image_Button_Random,?I_Info)
+CatchImage(#Image_Button_Random,?I_Dice)
 ResizeImage(#Image_Button_Random,ImageWidth(#Image_Button_Random)*DesktopResolutionX(),ImageHeight(#Image_Button_Random)*DesktopResolutionY(),#PB_Image_Smooth)
 ButtonImageGadget(#Gadget_RandomButton,800,0,40,40,ImageID(#Image_Button_Random))
 ListIconGadget(#Gadget_List,400,40,440,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
@@ -1642,8 +1642,8 @@ DataSection;More data...
 EndDataSection
 
 ; IDE Options = PureBasic 6.12 LTS (Windows - x64)
-; CursorPosition = 1204
-; FirstLine = 61
+; CursorPosition = 1202
+; FirstLine = 63
 ; Folding = AAAAAAAAAAAAAAAAAAAAAg
 ; Optimizer
 ; EnableAsm
