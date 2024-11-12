@@ -1,4 +1,4 @@
-﻿;PureMondrian 1.5.2 by Jac de Lad
+﻿;PureMondrian 1.6.1 by Jac de Lad
 EnableExplicit
 UsePNGImageDecoder()
 UseGIFImageDecoder()
@@ -44,6 +44,8 @@ Enumeration Images
   #Image_Dice
   #Image_Settings
   #Image_RotateTile
+  #Image_Button_Settings
+  #Image_Button_Random
 EndEnumeration
 Enumeration Menus
   #Menu_DE
@@ -117,7 +119,7 @@ Structure Lang
   Map Entry$()
 EndStructure
 
-#Version          = "1.6.0"
+#Version          = "1.6.1"
 #AutoSolve_Enable = #False
 #AutoSolve_Time   = 60000
 #Custom_Enable    = #False;#True
@@ -980,21 +982,21 @@ Procedure DrawProgress()
   VectorSourceColor(Background)
   FillVectorOutput()
   ScaleCoordinates(DesktopResolutionX(), DesktopResolutionY())
-  VectorFont(FontID(#Font_Progress),20/DesktopResolutionX())
+  VectorFont(FontID(#Font_Progress),16)
   VectorSourceColor(Color("Text")|$FF000000)
   MovePathCursor(30-0.5*VectorTextWidth(Text$),6)
   DrawVectorText(Text$)
-  VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
+  VectorFont(FontID(#Font_Progress),12)
   Text$=StringField(Diff$,6,",")
   MovePathCursor(30-0.5*VectorTextWidth(Text$),22)
   DrawVectorText(Text$)
   VectorSourceColor(Color("Text")|$FF000000)
   For Count=0 To 4
-    VectorFont(FontID(#Font_Progress),20/DesktopResolutionX())
+    VectorFont(FontID(#Font_Progress),16)
     If (Count=4 And (TCount(4)=0 Or #Custom_Enable=#False Or Progress<#ProgressNeededforCustomPuzzles)) Or (Count<>4 And (Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)))
       MovePathCursor(60*(Count+1)+22,6)
       DrawVectorImage(ImageID(#Image_Lock))
-      VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
+      VectorFont(FontID(#Font_Progress),12)
       Text$=StringField(Diff$,Count+1,",")
       VectorSourceColor(#Gray|$FF000000)
       MovePathCursor(60*Count+90-0.5*VectorTextWidth(Text$),22)
@@ -1013,7 +1015,7 @@ Procedure DrawProgress()
         MovePathCursor(60*(Count+1)+30-0.5*VectorTextWidth(Text$),6)
         DrawVectorText(Text$)
       EndIf
-      VectorFont(FontID(#Font_Progress),16/DesktopResolutionX())
+      VectorFont(FontID(#Font_Progress),12)
       Text$=StringField(Diff$,Count+1,",")
       VectorSourceColor(Color("Text")|$FF000000)
       MovePathCursor(60*Count+90-0.5*VectorTextWidth(Text$),22)
@@ -1194,9 +1196,13 @@ StartVectorDrawing(CanvasVectorOutput(#Gadget_Canvas))
 VectorSourceColor(Background)
 FillVectorOutput()
 StopVectorDrawing()
-ButtonImageGadget(#Gadget_OptionButton,400,0,40,40,ImageID(CatchImage(#PB_Any,?I_Info)))
+CatchImage(#Image_Button_Settings,?I_Info)
+ResizeImage(#Image_Button_Settings,ImageWidth(#Image_Button_Settings)*DesktopResolutionX(),ImageHeight(#Image_Button_Settings)*DesktopResolutionY(),#PB_Image_Smooth)
+ButtonImageGadget(#Gadget_OptionButton,400,0,40,40,ImageID(#Image_Button_Settings))
 CanvasGadget(#Gadget_Progress,440,0,360,40)
-ButtonImageGadget(#Gadget_RandomButton,800,0,40,40,ImageID(CatchImage(#PB_Any,?I_Dice)))
+CatchImage(#Image_Button_Random,?I_Info)
+ResizeImage(#Image_Button_Random,ImageWidth(#Image_Button_Random)*DesktopResolutionX(),ImageHeight(#Image_Button_Random)*DesktopResolutionY(),#PB_Image_Smooth)
+ButtonImageGadget(#Gadget_RandomButton,800,0,40,40,ImageID(#Image_Button_Random))
 ListIconGadget(#Gadget_List,400,40,440,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
 SetGadgetAttribute(#Gadget_List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
 GadgetToolTip(#Gadget_OptionButton,"Optionen")
@@ -1541,7 +1547,7 @@ DataSection;Predefined puzzles
   Data.l $009D5833,$028A5690,$0225A45C,$021A0B2E,$03D612AA,$0017D22A,$01784DB7,$0001B2E3,$005DB1B4,$033BCAF6,$00BF3683
   Data.l $02896AE6,$027AECB5,$02C2802E,$0185DE5F,$021C551E,$01FAC426,$02272A8E,$02BE625A,$022618B0,$030D6936,$032DC4B0
   ;Yellow Edition
-  Data.l $00CCC78E,$01F0D812,$0171E52B,$02888285,$048DCAC6,$004FFABA,$02C1DF48,$017192BF,$048C4535,$0151AEFF,$0274FCC8
+  Data.l $00CCC78E,$01F0D812,$00D94EAB,$02888285,$048DCAC6,$004FFABA,$02C1DF48,$017192BF,$048C4535,$0151AEFF,$0274FCC8
   Data.l $00DAD036,$00BFCF21,$02A16025,$02FFB048,$048E67CE,$0105B635,$033E6311,$022C3010,$022A0E16,$00EB71DE,$01FC1EC0
   
   ;Medium:
@@ -1636,9 +1642,9 @@ DataSection;More data...
 EndDataSection
 
 ; IDE Options = PureBasic 6.12 LTS (Windows - x64)
-; CursorPosition = 974
-; FirstLine = 51
-; Folding = CAAAAAAAAAAAAABAYGAAAg
+; CursorPosition = 1204
+; FirstLine = 61
+; Folding = AAAAAAAAAAAAAAAAAAAAAg
 ; Optimizer
 ; EnableAsm
 ; EnableThread
