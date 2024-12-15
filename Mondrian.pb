@@ -20,7 +20,7 @@ Runtime Enumeration Gadgets
   #Gadget_NoGradient
   #Gadget_SharpCorners
   #Gadget_ThinBorders
-  #Gadget_LightColors
+  #Gadget_ColorScheme
   #Gadget_NoWinAnimation
   #Gadget_Progress
   #Gadget_RandomOrientation
@@ -108,7 +108,7 @@ Structure Settings
   SharpCorners.a
   NoGradient.a
   ThinBorders.a
-  LightColors.a
+  ColorScheme.a
   NoWinAnimation.a
   RandomOrientation.a
   WindowX.l
@@ -119,11 +119,11 @@ Structure Lang
   Map Entry$()
 EndStructure
 
-#Version          = "1.6.1"
-#AutoSolve_Enable = #False
-#AutoSolve_Time   = 60000
-#Custom_Enable    = #False;#True
-#ProgressNeededforCustomPuzzles = 0;in Percent
+#Version                      = "1.6.2"
+#AutoSolve_Enable             = #False
+#AutoSolve_Time               = 60000
+#Custom_Enable                = #False;#True
+#ProgressNeededforNextPuzzles = 50    ;in Percent
 
 Global.i Thread,DrawMutex=CreateMutex(),WinAnim=CatchImage(#PB_Any,?Win),WinThread,GThread
 Global.l Background,BestTime,Button
@@ -890,7 +890,7 @@ Procedure LoadProgress()
     File=ReadFile(#PB_Any,SettingsFile$)
     Settings\NoGradient=ReadByte(File)
     If FS>=2:Settings\SharpCorners=ReadByte(File):EndIf
-    If FS>=3:Settings\LightColors=ReadByte(File):EndIf
+    If FS>=3:Settings\ColorScheme=ReadByte(File):EndIf
     If FS>=4:Settings\ThinBorders=ReadByte(File):EndIf
     If FS>=5:Settings\NoWinAnimation=ReadByte(File):EndIf
     If FS>=6:Settings\RandomOrientation=ReadByte(File):EndIf
@@ -921,7 +921,7 @@ Procedure SaveProgress()
   If File
     WriteByte(File,Settings\NoGradient)
     WriteByte(File,Settings\SharpCorners)
-    WriteByte(File,Settings\LightColors)
+    WriteByte(File,Settings\ColorScheme)
     WriteByte(File,Settings\ThinBorders)
     WriteByte(File,Settings\NoWinAnimation)
     WriteByte(File,Settings\RandomOrientation)
@@ -993,7 +993,7 @@ Procedure DrawProgress()
   VectorSourceColor(Color("Text")|$FF000000)
   For Count=0 To 4
     VectorFont(FontID(#Font_Progress),16)
-    If (Count=4 And (TCount(4)=0 Or #Custom_Enable=#False Or Progress<#ProgressNeededforCustomPuzzles)) Or (Count<>4 And (Count>0 And PProgress(Count-1)<0.5*TCount(Count-1)))
+    If (Count=4 And (TCount(4)=0 Or #Custom_Enable=#False Or Progress<#ProgressNeededforNextPuzzles)) Or (Count<>4 And (Count>0 And PProgress(Count-1)<0.01*#ProgressNeededforNextPuzzles*TCount(Count-1)))
       MovePathCursor(60*(Count+1)+22,6)
       DrawVectorImage(ImageID(#Image_Lock))
       VectorFont(FontID(#Font_Progress),12)
@@ -1039,14 +1039,24 @@ Procedure Settings()
   SetGadgetFont(#PB_Default,FontID(#Font_Standard))
   If Language
     OpenXMLDialog(0,0,"Settings_EN",0,0,0,0,WindowID(#MainWindow))
+    AddGadgetItem(#Gadget_ColorScheme,-1,"White Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Red Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Blue Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Yellow Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Mr.L Edition")
   Else
     OpenXMLDialog(0,0,"Settings_DE",0,0,0,0,WindowID(#MainWindow))
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Weiße Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Rote Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Blaue Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Gelbe Edition")
+    AddGadgetItem(#Gadget_ColorScheme,-1,"Mr.L Edition")
   EndIf
   DisableWindow(#MainWindow,#True)
   SetGadgetState(#Gadget_NoGradient,Settings\NoGradient&#PB_Checkbox_Checked)
   SetGadgetState(#Gadget_SharpCorners,Settings\SharpCorners&#PB_Checkbox_Checked)
   SetGadgetState(#Gadget_ThinBorders,Settings\ThinBorders&#PB_Checkbox_Checked)
-  SetGadgetState(#Gadget_LightColors,Settings\LightColors&#PB_Checkbox_Checked)
+  SetGadgetState(#Gadget_ColorScheme,Settings\ColorScheme)
   SetGadgetState(#Gadget_NoWinAnimation,Settings\NoWinAnimation&#PB_Checkbox_Checked)
   SetGadgetState(#Gadget_RandomOrientation,Settings\RandomOrientation&#PB_Checkbox_Checked)
   Repeat
@@ -1057,19 +1067,49 @@ Procedure Settings()
         Break
       Case #PB_Event_Gadget
         Select EventType()
-          Case #PB_EventType_LeftClick
+          Case #PB_EventType_Change
             Select EventGadget()
-              Case #Gadget_LightColors,#Gadget_NoGradient,#Gadget_SharpCorners,#Gadget_ThinBorders
+              Case #Gadget_ColorScheme
                 If Not IsThread(GThread)
                   Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
                   Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
                   Settings\ThinBorders=Bool(GetGadgetState(#Gadget_ThinBorders)<>0)
-                  Settings\LightColors=Bool(GetGadgetState(#Gadget_LightColors)<>0)
-                  If Settings\LightColors
-                    SetTileColors(?Color2)
-                  Else
-                    SetTileColors(?Color1)
-                  EndIf
+                  Settings\ColorScheme=GetGadgetState(#Gadget_ColorScheme)
+                  Select Settings\ColorScheme
+                    Case 0;White Edition
+                      SetTileColors(?Color0)
+                    Case 1;Red Edition
+                      SetTileColors(?Color1)
+                    Case 2;Blue Edition
+                      SetTileColors(?Color2)
+                    Case 3;Yellow Edition
+                      SetTileColors(?Color3)
+                    Case 4;Colors by Mr.L
+                      SetTileColors(?Color4)
+                  EndSelect
+                  Draw(0)
+                EndIf
+            EndSelect
+          Case #PB_EventType_LeftClick
+            Select EventGadget()
+              Case #Gadget_NoGradient,#Gadget_SharpCorners,#Gadget_ThinBorders
+                If Not IsThread(GThread)
+                  Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
+                  Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
+                  Settings\ThinBorders=Bool(GetGadgetState(#Gadget_ThinBorders)<>0)
+                  Settings\ColorScheme=GetGadgetState(#Gadget_ColorScheme)
+                  Select Settings\ColorScheme
+                    Case 0;White Edition
+                      SetTileColors(?Color0)
+                    Case 1;Red Edition
+                      SetTileColors(?Color1)
+                    Case 2;Blue Edition
+                      SetTileColors(?Color2)
+                    Case 3;Yellow Edition
+                      SetTileColors(?Color3)
+                    Case 4;Colors by Mr.L
+                      SetTileColors(?Color4)
+                  EndSelect
                   Draw(0)
                 EndIf
               Case #Gadget_Cancel
@@ -1080,14 +1120,21 @@ Procedure Settings()
                 Settings\NoGradient=Bool(GetGadgetState(#Gadget_NoGradient)<>0)
                 Settings\SharpCorners=Bool(GetGadgetState(#Gadget_SharpCorners)<>0)
                 Settings\ThinBorders=Bool(GetGadgetState(#Gadget_ThinBorders)<>0)
-                Settings\LightColors=Bool(GetGadgetState(#Gadget_LightColors)<>0)
                 Settings\NoWinAnimation=Bool(GetGadgetState(#Gadget_NoWinAnimation)<>0)
                 Settings\RandomOrientation=Bool(GetGadgetState(#Gadget_RandomOrientation)<>0)
-                If Settings\LightColors
-                  SetTileColors(?Color2)
-                Else
-                  SetTileColors(?Color1)
-                EndIf
+                Settings\ColorScheme=GetGadgetState(#Gadget_ColorScheme)
+                Select Settings\ColorScheme
+                  Case 0;White Edition
+                    SetTileColors(?Color0)
+                  Case 1;Red Edition
+                    SetTileColors(?Color1)
+                  Case 2;Blue Edition
+                    SetTileColors(?Color2)
+                  Case 3;Yellow Edition
+                    SetTileColors(?Color3)
+                  Case 4;Colors by Mr.L
+                    SetTileColors(?Color4)
+                EndSelect
                 SaveProgress()
                 Draw(0)
                 Break
@@ -1099,8 +1146,12 @@ Procedure Settings()
   SetActiveWindow(#MainWindow)
   FreeDialog(0)
 EndProcedure
+Procedure ResizeHandler()
+  ResizeGadget(#Gadget_List,#PB_Ignore,#PB_Ignore,WindowWidth(#MainWindow)-400,#PB_Ignore)
+EndProcedure
 
-OpenWindow(#MainWindow,0,0,840,630,"PureMondrian "+#Version,#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget|#PB_Window_Invisible)
+OpenWindow(#MainWindow,0,0,840,630,"PureMondrian "+#Version,#PB_Window_ScreenCentered|#PB_Window_SystemMenu|#PB_Window_MinimizeGadget|#PB_Window_Invisible|#PB_Window_SizeGadget)
+WindowBounds(#MainWindow,840,630,#PB_Ignore,630)
 
 ;{ Tile creation macro
 Macro CreateTile(MyX,MyY,MyInitX,MyInitY,MyColor=#Black,MyFixed=#False)
@@ -1174,7 +1225,8 @@ MenuItem(2,"Wie man spielt",ImageID(#Image_Control))
 MenuItem(3,"Einstellungen",ImageID(#Image_Settings))
 MenuBar()
 MenuItem(4,"Über dieses Spiel",ImageID(#Image_About))
-MenuItem(5,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
+MenuItem(5,"Offizielle GitHub-Seite",ImageID(#Image_Internet))
+MenuItem(6,"Offizieller Thread im PureBasic-Forum",ImageID(#Image_Internet))
 
 CreatePopupImageMenu(#Menu_EN)
 MenuItem(1,"Zu Deutsch wechseln",ImageID(#Image_Language))
@@ -1182,7 +1234,8 @@ MenuItem(2,"How to play",ImageID(#Image_Control))
 MenuItem(3,"Settings",ImageID(#Image_Settings))
 MenuBar()
 MenuItem(4,"About this game",ImageID(#Image_About))
-MenuItem(5,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
+MenuItem(5,"Official GitHub site",ImageID(#Image_Internet))
+MenuItem(6,"Official thread in the PureBasic forum",ImageID(#Image_Internet))
 ;}
 
 InitSound()
@@ -1203,7 +1256,7 @@ CanvasGadget(#Gadget_Progress,440,0,360,40)
 CatchImage(#Image_Button_Random,?I_Dice)
 ResizeImage(#Image_Button_Random,ImageWidth(#Image_Button_Random)*DesktopResolutionX(),ImageHeight(#Image_Button_Random)*DesktopResolutionY(),#PB_Image_Smooth)
 ButtonImageGadget(#Gadget_RandomButton,800,0,40,40,ImageID(#Image_Button_Random))
-ListIconGadget(#Gadget_List,400,40,440,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect|#PB_ListIcon_GridLines)
+ListIconGadget(#Gadget_List,400,40,440,590,"Puzzle",180,#PB_ListIcon_AlwaysShowSelection|#PB_ListIcon_FullRowSelect)
 SetGadgetAttribute(#Gadget_List, #PB_ListIcon_DisplayMode, #PB_ListIcon_LargeIcon)
 GadgetToolTip(#Gadget_OptionButton,"Optionen")
 GadgetToolTip(#Gadget_RandomButton,"Zufälliges Puzzle")
@@ -1211,19 +1264,27 @@ DrawTools()
 LoadPuzzles()
 LoadProgress()
 ResizeWindow(#MainWindow,Settings\WindowX,Settings\WindowY,#PB_Ignore,#PB_Ignore)
-HideWindow(#MainWindow,#False)
-If Settings\LightColors
-  SetTileColors(?Color2)
-Else
-  SetTileColors(?Color1)
-EndIf
+Select Settings\ColorScheme
+  Case 0;White Edition
+    SetTileColors(?Color0)
+  Case 1;Red Edition
+    SetTileColors(?Color1)
+  Case 2;Blue Edition
+    SetTileColors(?Color2)
+  Case 3;Yellow Edition
+    SetTileColors(?Color3)
+  Case 4;Colors by Mr.L
+    SetTileColors(?Color4)
+EndSelect
 LoadNextPuzzle()
 Progress()
 DrawProgress()
 
+BindEvent(#PB_Event_SizeWindow,@ResizeHandler(),#MainWindow)
 AddWindowTimer(#MainWindow,1,100)
 AddKeyboardShortcut(#MainWindow,458859,999)
 PostEvent(#PB_Event_Menu,#MainWindow,1)
+HideWindow(#MainWindow,#False)
 
 Repeat
   Select WaitWindowEvent()
@@ -1257,14 +1318,23 @@ Repeat
             MessageRequester("Information",~"PureMondrian\r\nby Jac de Lad\r\n\r\nMit der Unterstützung und umgesetzten Vorschlägen von Mr.L, moulder61, infratec, AZJIO, Axolotl und MindPhazer. Sie können den kompletten Quellcode auf https://github.com/jacdelad/PureMondrian herunterladen und ihre eigene, angepasste App mit PureBasic erzeugen. Aber nicht zum Verkaufen und immer eine Referenz zur Quelle hinzufügen!",#PB_MessageRequester_Info)
           EndIf
         Case 5
-          CompilerSelect #PB_Compiler_OS
+          CompilerSelect #PB_Compiler_OS;This piece of code was written by infratec (I only did the Windows one)
+            CompilerCase #PB_OS_Windows
+              RunProgram("https://github.com/jacdelad/PureMondrian")
+            CompilerCase #PB_OS_Linux
+              RunProgram("xdg-open", "https://github.com/jacdelad/PureMondrian", "")
+            CompilerCase #PB_OS_MacOS
+              RunProgram("open", "https://github.com/jacdelad/PureMondrian", "")
+          CompilerEndSelect;...
+        Case 6
+          CompilerSelect #PB_Compiler_OS;This piece of code was written by infratec (I only did the Windows one)
             CompilerCase #PB_OS_Windows
               RunProgram("https://www.purebasic.fr/english/viewtopic.php?t=84627")
             CompilerCase #PB_OS_Linux
               RunProgram("xdg-open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
             CompilerCase #PB_OS_MacOS
               RunProgram("open", "https://www.purebasic.fr/english/viewtopic.php?t=84627", "")
-          CompilerEndSelect
+          CompilerEndSelect;...
         Case 999
           SolveMode=1-SolveMode
           DrawTools()
@@ -1413,7 +1483,7 @@ Repeat
               EndIf
               InRotation=#False
             Case #Gadget_Progress
-              If ProgButton>=0 And ProgButton<=4 And ProgButton<>Difficulty And (ProgButton=0 Or (ProgButton=4 And #Custom_Enable=#True And TCount(4)>0) Or PProgress(ProgButton-1)>=0.5*TCount(ProgButton-1))
+              If ProgButton>=0 And ProgButton<=4 And ProgButton<>Difficulty And (ProgButton=0 Or (ProgButton=4 And #Custom_Enable=#True And TCount(4)>0) Or PProgress(ProgButton-1)>=0.01*#ProgressNeededforNextPuzzles*TCount(ProgButton-1))
                 LoadList(ProgButton)
                 Solved=#True
                 Timer=1
@@ -1573,7 +1643,7 @@ DataSection;Predefined puzzles
   Data.l $0E0AF966,$10883320,$0FBCC83E,$0D2D214B,$0D560470,$0DD7B98E,$1017E016,$105E86CF,$0E672452,$0D8E299A,$0DD51B99
   ;Blue Edition
   Data.l $0F2EBC1B,$0C03459D,$0DD9B09A,$0F17DB77,$0D621346,$10891CF5,$0DD9640B,$101D1389,$106BD090,$0D8E2B49,$0C59F311
-  Data.l $0D3B78B2,$0F285047,$10232F67,$0D2071B6,$0DF99A37,$0D91FAC1,$101D628F,$0E06B4B5,$0D6989A0,$0EC46202,$0BF6C3C6
+  Data.l $0D3B78B2,$0F285047,$10232F67,$0D2071B6,$0DF99A37,$0D91FAC1,$101D628F,$0E06B4B5,$0D69893C,$0EC43AF2,$0BF6C3C6
   ;Yellow Edition
   Data.l $0E9ABC0F,$0FC4B684,$0D6C9B9A,$0F05D570,$0CDADFC1,$0CC7A325,$0F45C7E9,$0D500E94,$0E652A8A,$0CBCF8B7,$0E9A6C72
   Data.l $0E052E32,$0D531FD1,$0F9EE12A,$0F46D9DA,$0D73ECA6,$0FA43707,$0CB88E85,$0FADFA66,$0C570C91,$0F8454CD,$0F5665EF
@@ -1632,9 +1702,15 @@ DataSection;More icons
 EndDataSection
 DataSection;More data...
   Windows: : IncludeBinary "Mondrian.xml" : WindowsEnd:
-  Color1:
-  Data.l #Blue,#Cyan,#Red,#Cyan,#Red,#Cyan,#Yellow,#Yellow
-  Color2:
+  Color0:;White Edition
+  Data.l #Blue,#White,#Red,#Red,#Red,#White,#Yellow,#Yellow
+  Color1:;Red Edition
+  Data.l #Yellow,#Red,#White,#White,#White,#Red,#Blue,#Blue
+  Color2:;Blue Edition
+  Data.l #Red,#Yellow,#Blue,#Blue,#Blue,#Yellow,#White,#White
+  Color3:;Yellow Edition
+  Data.l #White,#Blue,#Yellow,#Yellow,#Yellow,#Blue,#Red,#Red
+  Color4:;Colors by Mr.L
   Data.l $FF8989,$59FF6F,$3E4EFF,#Cyan,$FF68EA,$689EFF,#Yellow,#Yellow
   Clapping:
   IncludeBinary "Clapping.ogg"
@@ -1642,9 +1718,9 @@ DataSection;More data...
 EndDataSection
 
 ; IDE Options = PureBasic 6.12 LTS (Windows - x64)
-; CursorPosition = 1202
-; FirstLine = 63
-; Folding = AAAAAAAAAAAAAAAAAAAAAg
+; CursorPosition = 1326
+; FirstLine = 110
+; Folding = AAAAAAAAAAAAAAAgA9AAAAA-
 ; Optimizer
 ; EnableAsm
 ; EnableThread

@@ -1,15 +1,18 @@
 <dialogs>
 
-	<window id='#PB_Any' name='Settings_DE' text='Einstellungen' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
+	<window id='#PB_Any' name='Settings_DE' text='Einstellungen' flags='#PB_Window_WindowCentered|#PB_Window_SystemMenu'>
 		<vbox>
+			<checkbox id='#Gadget_RandomOrientation' text='Lade Puzzle mit zufälliger Drehung'/>
+			<checkbox id='#Gadget_NoWinAnimation' text='Keine Animation bei Sieg'/>
 			<frame text='Darstellung'>
 				<vbox>
 					<checkbox id='#Gadget_SharpCorners' text='Keine abgerundeten Ecken'/>
 					<checkbox id='#Gadget_NoGradient' text='Kein Farbverlauf'/>
-					<checkbox id='#Gadget_LightColors' text='Hellere Farben'/>
+					<hbox expand='item:2'>
+					  <text text='Farbschema:'/>
+					  <combobox id='#Gadget_ColorScheme'/>
+					</hbox>
 					<checkbox id='#Gadget_ThinBorders' text='Dünne Ränder'/>
-					<checkbox id='#Gadget_NoWinAnimation' text='Keine Animation bei Sieg'/>
-					<checkbox id='#Gadget_RandomOrientation' text='Lade Puzzle mit zufälliger Drehung'/>
 				</vbox>
 			</frame>
 			<hbox expand='item:2'>
@@ -20,16 +23,19 @@
 		</vbox>
 	</window>
 
-	<window id='#PB_Any' name='Settings_EN' text='Settings' flags='#PB_Window_ScreenCentered|#PB_Window_SystemMenu'>
+	<window id='#PB_Any' name='Settings_EN' text='Settings' flags='#PB_Window_WindowCentered|#PB_Window_SystemMenu'>
 		<vbox>
+			<checkbox id='#Gadget_RandomOrientation' text='Load puzzle with random orientation'/>
+			<checkbox id='#Gadget_NoWinAnimation' text='No winning animation'/>
 			<frame text='Graphics'>
 				<vbox>
 					<checkbox id='#Gadget_SharpCorners' text='No rounded corners'/>
 					<checkbox id='#Gadget_NoGradient' text='No gradient'/>
-					<checkbox id='#Gadget_LightColors' text='Lighter colors'/>
+					<hbox expand='item:2'>
+					  <text text='Color Scheme:'/>
+					  <combobox id='#Gadget_ColorScheme'/>
+					</hbox>
 					<checkbox id='#Gadget_ThinBorders' text='Thin borders'/>
-					<checkbox id='#Gadget_NoWinAnimation' text='No winning animation'/>
-					<checkbox id='#Gadget_RandomOrientation' text='Load puzzle with random orientation'/>
 				</vbox>
 			</frame>
 			<hbox expand='item:2'>
